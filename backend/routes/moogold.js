@@ -161,22 +161,21 @@ router.get('/products/:game_id', async (req, res) => {
 // POST /api/moogold/validate - Validate player ID and get In-Game Name
 router.post('/validate', async (req, res) => {
     try {
-        const { product_id, playerId, zoneId } = req.body;
+        const { product_id, dbGameId, playerId, zoneId } = req.body;
         
-        // 1. Map MooGold Product IDs to RapidAPI endpoints
-        // When you get real MooGold data, just add the new product_id here!
-        const gameMap = {
-            '332': 'mobile-legends',     // Example MLBB ID
-            '15145': 'mobile-legends',   // Example MLBB ID
-            '1': 'mobile-legends',       // Your Mock Data ID
-            'FREEFIRE_ID_HERE': 'freefire' // Replace with real MooGold ID for Free Fire
-        };
-
-        const gameSlug = gameMap[product_id] || 'mobile-legends'; // Default to MLBB if unknown
+        // 1. Fetch Game from Database to get its RapidAPI Slug
+        let game = null;
+        if (dbGameId) {
+            game = await Game.findById(dbGameId);
+        } else {
+            game = await Game.findOne({ moogoldId: product_id });
+        }
+        
+        const gameSlug = game?.rapidApiId || 'mobile-legends'; // Default fallback
 
         // 2. Build the correct RapidAPI URL
         let rapidApiUrl = '';
-        if (gameSlug === 'mobile-legends') {
+        if (zoneId && zoneId.trim() !== '') {
             rapidApiUrl = `https://id-game-checker.p.rapidapi.com/${gameSlug}/${playerId}/${zoneId}`;
         } else {
             rapidApiUrl = `https://id-game-checker.p.rapidapi.com/${gameSlug}/${playerId}`;
@@ -202,6 +201,7 @@ router.post('/validate', async (req, res) => {
                 });
             }
             
+            // The API is working fine, so if it's not found, it's truly invalid.
             return res.status(400).json({ error: 'Player ID or Zone ID not found in game database.' });
             
         } catch (freeError) {

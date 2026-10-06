@@ -43,6 +43,11 @@ const routes = [
     path: '/page/:slug',
     name: 'CustomPage',
     component: () => import('../views/CustomPage.vue')
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('../views/NotFound.vue')
   }
 ]
 

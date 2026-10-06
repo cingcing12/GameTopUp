@@ -234,6 +234,7 @@ const searchQuery = ref('')
 const isUploading = ref({}) // track upload state per game id
 const isUploadingBanner = ref({}) // track upload state for banner
 const isUploadingSlider = ref({}) // track upload state for slider
+const isSavingGameData = ref({}) // track save state for game data
 
 // Slider CRUD state
 const showSliderModal = ref(false)
@@ -419,6 +420,30 @@ const fetchTransactions = async () => {
     console.error("Error fetching admin data", error)
   } finally {
     isLoading.value = false
+  }
+}
+
+const saveGameApi = async (game) => {
+  isSavingGameData.value[game._id] = true
+  try {
+    const formData = new FormData()
+    formData.append('rapidApiId', game.rapidApiId)
+    
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await fetch(`${apiUrl}/api/games/${game._id}`, {
+      method: 'PUT',
+      body: formData
+    })
+    
+    if (res.ok) {
+      showToast('API slug updated successfully!', 'success')
+    } else {
+      showToast('Error updating API slug', 'error')
+    }
+  } catch (error) {
+    showToast('Error updating API slug', 'error')
+  } finally {
+    isSavingGameData.value[game._id] = false
   }
 }
 
@@ -994,7 +1019,21 @@ const formatDate = (dateString) => {
 
                 <!-- Banner Upload -->
                 <div class="mt-auto pt-4 border-t border-white/10 flex flex-col gap-3">
-                  <div class="flex items-center justify-between">
+                  <div class="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
+                    <span class="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                      API Slug
+                      <RefreshCw v-if="isSavingGameData[game._id]" class="w-3 h-3 animate-spin text-primary" />
+                    </span>
+                    <input 
+                      v-model="game.rapidApiId" 
+                      @change="saveGameApi(game)"
+                      type="text" 
+                      placeholder="e.g. mobile-legends"
+                      class="w-32 bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:border-primary outline-none" 
+                    />
+                  </div>
+
+                  <div class="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
                     <span class="text-xs text-gray-400 font-bold uppercase tracking-wider">Cover Banner</span>
                     <label :for="'banner-' + game._id" class="cursor-pointer bg-black/50 backdrop-blur border border-white/10 hover:bg-primary/20 hover:text-primary hover:border-primary/50 text-gray-300 transition-all px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2">
                       <RefreshCw v-if="isUploadingBanner[game._id]" class="w-3.5 h-3.5 animate-spin" />

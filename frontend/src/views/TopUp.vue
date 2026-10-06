@@ -232,6 +232,7 @@ const checkPlayerId = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         product_id: moogoldProductId,
+        dbGameId: gameId.length === 24 ? gameId : null,
         playerId: playerId.value,
         zoneId: zoneId.value
       })
@@ -240,15 +241,7 @@ const checkPlayerId = async () => {
     const validateData = await validateRes.json()
     
     if (!validateRes.ok || validateData.err_code) {
-      if (validateData.err_code === '1111') {
-        if (moogoldProductId == 332 || moogoldProductId == 15145) {
-            throw new Error('Invalid Player ID or Zone ID')
-        } else {
-            idCheckError.value = "Validation unavailable for this game."
-        }
-      } else {
-        throw new Error(validateData.err_message || validateData.message || 'Invalid Player ID')
-      }
+      throw new Error(validateData.err_message || validateData.error || validateData.message || 'Invalid Player ID')
     } else {
       validatedName.value = validateData.username || 'Valid Account'
     }
@@ -318,6 +311,7 @@ const handleCheckout = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         product_id: moogoldProductId,
+        dbGameId: gameId.length === 24 ? gameId : null,
         playerId: playerId.value,
         zoneId: zoneId.value
       })
@@ -326,16 +320,7 @@ const handleCheckout = async () => {
     const validateData = await validateRes.json()
     
     if (!validateRes.ok || validateData.err_code) {
-      if (validateData.err_code === '1111') {
-        // MooGold blocked it because we aren't members.
-        // If it's MLBB and we got here, it means the free API is currently DOWN or the ID is fake.
-        // We shouldn't block the customer from paying just because the free API is down, so we bypass it.
-        console.warn("Validation API is member-only or free API is down. Bypassing validation.")
-        validatedName.value = '' 
-      } else {
-        // Real error from MooGold (if we ever get member access)
-        throw new Error(validateData.err_message || validateData.message || 'Invalid Player ID')
-      }
+      throw new Error(validateData.err_message || validateData.error || validateData.message || 'Invalid Player ID')
     } else {
       validatedName.value = validateData.username || 'Valid Account'
     }
@@ -728,8 +713,16 @@ const confirmPaymentAndTopUp = async () => {
           <div class="text-primary font-black text-2xl mb-1">Scan to Pay</div>
           <p class="text-gray-400 text-sm mb-6 text-center">Use ABA, Acleda, or any KHQR supported app to scan.</p>
           
-          <div class="bg-white p-4 rounded-xl shadow-inner mb-6 relative group">
+          <div class="bg-white p-4 rounded-xl shadow-inner mb-6 relative group flex items-center justify-center">
             <img :src="khqrData?.qrImage" class="w-64 h-64 object-contain" />
+            
+            <!-- Logo overlay in the center of QR code -->
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div class="bg-white p-1 rounded-xl shadow-md border-2 border-primary">
+                <img src="/logo.jpg" class="w-12 h-12 rounded-lg object-cover" />
+              </div>
+            </div>
+
             <div class="absolute inset-0 border-4 border-dashed border-primary/50 rounded-xl pointer-events-none group-hover:border-primary transition-colors"></div>
           </div>
           
