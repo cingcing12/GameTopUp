@@ -47,7 +47,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory('/GameTopUp/'),
   routes,
   scrollBehavior(to, from, savedPosition) {
     return { top: 0 }
