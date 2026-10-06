@@ -76,10 +76,19 @@ router.post('/check', async (req, res) => {
 
     const data = await response.json();
     
+    // Log the exact response from Bakong to see what it's returning
+    console.log('Bakong Check Response:', JSON.stringify(data));
+
     // Usually Bakong Open API returns { responseCode: 0, responseMessage: "Success", data: {...} }
-    // Or responseCode = 0 for successful payment. 
-    // Please verify the exact response code structure for your specific Bakong bank API.
-    if (data.responseCode === 0 || data.errorCode === 0) {
+    // We use loose equality (==) in case the API returns a string "0" instead of an integer 0
+    if (data.responseCode == 0 || data.errorCode == 0 || data.code == 0) {
+      // Some bank APIs return responseCode 0 for any successful API call, 
+      // but the actual payment status is inside data.status
+      const txStatus = data.data?.status || data.transactionStatus || data.data?.transactionStatus;
+      if (txStatus && txStatus.toString().toUpperCase() !== 'SUCCESS') {
+        return res.json({ success: false, message: 'Payment not successful yet', status: txStatus, error: data });
+      }
+
       return res.json({ success: true, message: 'Payment verified', data: data.data || data });
     } else {
       // Payment not found or not yet paid. 
