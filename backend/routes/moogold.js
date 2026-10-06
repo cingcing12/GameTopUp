@@ -6,6 +6,25 @@ const Game = require('../models/Game');
 
 const BASE_URL = 'https://moogold.com/wp-json/v1/api';
 
+router.get('/test-proxy', async (req, res) => {
+    const { HttpsProxyAgent } = require('https-proxy-agent');
+    const proxyList = [
+        'http://zjvnatap:ioo73nj265iy@31.59.20.176:6754',
+        'http://zjvnatap:ioo73nj265iy@45.38.107.97:6014'
+    ];
+    try {
+        const results = [];
+        for (const proxy of proxyList) {
+            const agent = new HttpsProxyAgent(proxy);
+            const response = await axios.get('https://api.ipify.org?format=json', { httpsAgent: agent });
+            results.push({ proxy, ip: response.data.ip });
+        }
+        res.json(results);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Helper function to generate auth headers and make requests
 const moogoldRequest = async (path, method = 'GET', payloadData = null) => {
     const partnerId = process.env.MOOGOLD_PARTNER_ID;
@@ -37,20 +56,28 @@ const moogoldRequest = async (path, method = 'GET', payloadData = null) => {
         'Authorization': `Basic ${basicAuth}`,
         'auth': signature,
         'timestamp': timestamp,
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'Content-Type': 'application/json'
     };
 
-    // TEMPORARILY DISABLED PROXIES
-    // Since Liz hasn't whitelisted the new Webshare proxies yet,
-    // we will make direct requests so that it uses your local ISP's IPs 
-    // (116.212.147.32 and 116.212.147.34) which are already whitelisted.
+    const { HttpsProxyAgent } = require('https-proxy-agent');
+
+    // The two specific proxies we sent to Liz
+    const proxyList = [
+        'http://zjvnatap:ioo73nj265iy@31.59.20.176:6754',
+        'http://zjvnatap:ioo73nj265iy@45.38.107.97:6014'
+    ];
+    
+    // Pick one of the two proxies randomly to balance the load
+    const selectedProxy = proxyList[Math.floor(Math.random() * proxyList.length)];
+    const httpsAgent = new HttpsProxyAgent(selectedProxy);
+
     try {
         const response = await axios({
             method,
             url: `${BASE_URL}/${path}`,
             headers,
-            data: payloadData
+            data: payloadData,
+            httpsAgent: httpsAgent
         });
         return response.data;
     } catch (error) {
