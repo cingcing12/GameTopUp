@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   CheckCircle2, XCircle, Clock, Search, RefreshCw, 
@@ -394,7 +394,9 @@ const fetchTransactions = async () => {
   isLoading.value = true
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/transactions`)
+    const res = await fetch(`${apiUrl}/api/transactions`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+    })
     const data = await res.json()
     if (res.ok) {
       transactions.value = data
@@ -607,8 +609,11 @@ onMounted(() => {
   }
 })
 
-// Computeds
-const filteredTransactions = computed(() => {
+// Pagination state
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
+
+const searchedTransactions = computed(() => {
   if (!searchQuery.value) return transactions.value
   const query = searchQuery.value.toLowerCase()
   return transactions.value.filter(t => 
@@ -617,6 +622,26 @@ const filteredTransactions = computed(() => {
     t.status.toLowerCase().includes(query)
   )
 })
+
+const totalPages = computed(() => Math.ceil(searchedTransactions.value.length / itemsPerPage.value))
+
+const paginatedTransactions = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return searchedTransactions.value.slice(start, end)
+})
+
+watch(searchQuery, () => {
+  currentPage.value = 1
+})
+
+const prevPage = () => {
+  if (currentPage.value > 1) currentPage.value--
+}
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) currentPage.value++
+}
 
 const totalRevenue = computed(() => {
   return transactions.value
@@ -851,13 +876,13 @@ const formatDate = (dateString) => {
                     Loading transactions...
                   </td>
                 </tr>
-                <tr v-else-if="filteredTransactions.length === 0">
+                <tr v-else-if="paginatedTransactions.length === 0">
                   <td colspan="6" class="px-6 py-12 text-center text-gray-500">
                     No transactions found.
                   </td>
                 </tr>
                 <tr 
-                  v-for="tx in filteredTransactions" 
+                  v-for="tx in paginatedTransactions" 
                   :key="tx._id"
                   class="border-b border-white/5 hover:bg-white/5 transition-colors"
                 >
@@ -887,6 +912,37 @@ const formatDate = (dateString) => {
               </tbody>
             </table>
           </div>
+          
+          <!-- Pagination UI -->
+          <div v-if="totalPages > 1" class="p-4 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/[0.01]">
+            <div class="text-sm text-gray-400">
+              Showing <span class="font-bold text-white">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to <span class="font-bold text-white">{{ Math.min(currentPage * itemsPerPage, searchedTransactions.length) }}</span> of <span class="font-bold text-white">{{ searchedTransactions.length }}</span> results
+            </div>
+            <div class="flex items-center gap-2">
+              <button 
+                @click="prevPage" 
+                :disabled="currentPage === 1"
+                class="px-3 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed border border-white/10 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1"
+              >
+                <ChevronRight class="w-4 h-4 rotate-180" /> Prev
+              </button>
+              
+              <div class="flex items-center gap-1 px-2">
+                <span class="text-sm font-bold text-white">{{ currentPage }}</span>
+                <span class="text-sm text-gray-500">/</span>
+                <span class="text-sm text-gray-500">{{ totalPages }}</span>
+              </div>
+              
+              <button 
+                @click="nextPage" 
+                :disabled="currentPage === totalPages"
+                class="px-3 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed border border-white/10 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1"
+              >
+                Next <ChevronRight class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          
         </div>
         </div>
         <!-- End Dashboard Tab Content -->

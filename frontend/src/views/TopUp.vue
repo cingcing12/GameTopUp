@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { CheckCircle2, AlertCircle } from 'lucide-vue-next'
 import { useAuth } from '../composables/useAuth'
 
 const route = useRoute()
@@ -192,6 +193,25 @@ const transactionError = ref('')
 const khqrModalOpen = ref(false)
 const khqrData = ref(null)
 const isVerifyingPayment = ref(false)
+
+// Toast logic
+const toast = ref({ show: false, message: '', type: 'success' })
+let toastTimeout = null
+const showToast = (message, type = 'success') => {
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toast.value = { show: true, message, type };
+  toastTimeout = setTimeout(() => {
+    toast.value.show = false;
+  }, 3000);
+}
+
+watch(khqrModalOpen, (isOpen) => {
+  if (isOpen) {
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = ''
+  }
+})
 
 const isCheckingId = ref(false)
 const idCheckError = ref('')
@@ -442,6 +462,7 @@ const confirmPaymentAndTopUp = async () => {
         isVerifyingPayment.value = false
         khqrModalOpen.value = false
         transactionSuccess.value = true
+        showToast('Payment Verified! Top-Up Successful.', 'success')
       }, 1500)
     } else {
       throw new Error(data.message || data.error || 'Failed to create transaction')
@@ -695,54 +716,67 @@ const confirmPaymentAndTopUp = async () => {
     </div>
 
     <!-- KHQR Payment Modal -->
-    <div v-if="khqrModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="khqrModalOpen = false"></div>
-      
-      <div class="relative bg-darker border-2 border-primary/50 rounded-2xl p-8 max-w-sm w-full shadow-[0_0_50px_rgba(255,215,0,0.2)] animate-fade-in flex flex-col items-center">
-        <button @click="khqrModalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-white">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-        </button>
+    <Teleport to="body">
+      <div v-if="khqrModalOpen" class="fixed inset-0 z-[150] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="khqrModalOpen = false"></div>
         
-        <div class="text-primary font-black text-2xl mb-1">Scan to Pay</div>
-        <p class="text-gray-400 text-sm mb-6 text-center">Use ABA, Acleda, or any KHQR supported app to scan.</p>
-        
-        <div class="bg-white p-4 rounded-xl shadow-inner mb-6 relative group">
-          <img :src="khqrData?.qrImage" class="w-64 h-64 object-contain" />
-          <div class="absolute inset-0 border-4 border-dashed border-primary/50 rounded-xl pointer-events-none group-hover:border-primary transition-colors"></div>
-        </div>
-        
-        <div class="flex flex-col items-center mb-8 w-full px-4">
-          <!-- Show the validated game username -->
-          <div v-if="validatedName" class="text-white text-sm font-bold bg-white/5 border border-white/10 px-4 py-2 rounded-lg mb-4 text-center w-full truncate shadow-inner">
-            Account: <span class="text-primary">{{ validatedName }}</span>
+        <div class="relative bg-darker border-2 border-primary/50 rounded-2xl p-8 max-w-sm w-full shadow-[0_0_50px_rgba(255,215,0,0.2)] animate-fade-in flex flex-col items-center">
+          <button @click="khqrModalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-white">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+          
+          <div class="text-primary font-black text-2xl mb-1">Scan to Pay</div>
+          <p class="text-gray-400 text-sm mb-6 text-center">Use ABA, Acleda, or any KHQR supported app to scan.</p>
+          
+          <div class="bg-white p-4 rounded-xl shadow-inner mb-6 relative group">
+            <img :src="khqrData?.qrImage" class="w-64 h-64 object-contain" />
+            <div class="absolute inset-0 border-4 border-dashed border-primary/50 rounded-xl pointer-events-none group-hover:border-primary transition-colors"></div>
           </div>
+          
+          <div class="flex flex-col items-center mb-8 w-full px-4">
+            <!-- Show the validated game username -->
+            <div v-if="validatedName" class="text-white text-sm font-bold bg-white/5 border border-white/10 px-4 py-2 rounded-lg mb-4 text-center w-full truncate shadow-inner">
+              Account: <span class="text-primary">{{ validatedName }}</span>
+            </div>
 
-          <div class="text-3xl font-black text-white bg-darker/80 px-8 py-3 rounded-2xl border border-white/10 shadow-[0_0_15px_rgba(0,0,0,0.5)]">
-            ${{ selectedPackage?.price.toFixed(2) }}
+            <div class="text-3xl font-black text-white bg-darker/80 px-8 py-3 rounded-2xl border border-white/10 shadow-[0_0_15px_rgba(0,0,0,0.5)]">
+              ${{ selectedPackage?.price.toFixed(2) }}
+            </div>
           </div>
-        </div>
-        
-        <!-- Auto Check Status -->
-        <div class="w-full bg-white/5 border border-white/10 rounded-xl p-4 mb-4 flex items-center justify-between">
-           <div class="flex items-center gap-3">
-             <div class="relative flex h-4 w-4">
-               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-               <span class="relative inline-flex rounded-full h-4 w-4 bg-primary"></span>
+          
+          <!-- Auto Check Status -->
+          <div class="w-full bg-white/5 border border-white/10 rounded-xl p-4 mb-4 flex items-center justify-between">
+             <div class="flex items-center gap-3">
+               <div class="relative flex h-4 w-4">
+                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                 <span class="relative inline-flex rounded-full h-4 w-4 bg-primary"></span>
+               </div>
+               <span class="text-gray-300 font-semibold text-sm">Awaiting Payment...</span>
              </div>
-             <span class="text-gray-300 font-semibold text-sm">Awaiting Payment...</span>
-           </div>
-           <div class="text-primary font-mono font-bold text-lg bg-primary/10 px-2 py-0.5 rounded">{{ displayTime }}</div>
-        </div>
+             <div class="text-primary font-mono font-bold text-lg bg-primary/10 px-2 py-0.5 rounded">{{ displayTime }}</div>
+          </div>
 
-        <!-- Dev Simulate Button -->
-        <button  
-          @click="confirmPaymentAndTopUp"
-          :disabled="isVerifyingPayment"
-          class="w-full py-3 font-bold rounded-xl transition-all duration-300 text-sm flex items-center justify-center gap-2 relative overflow-hidden group border border-white/10 hover:border-primary/50"
-          :class="isVerifyingPayment ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-white/5 text-gray-400 hover:text-primary hover:bg-primary/10'"
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Cool Custom Toast Alert -->
+    <div 
+      class="fixed bottom-6 right-6 z-[200] transition-all duration-500 transform"
+      :class="toast.show ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'"
+    >
+      <div 
+        class="glass-card bg-[#161622]/90 backdrop-blur-xl border flex items-center gap-4 px-6 py-4 rounded-2xl shadow-2xl"
+        :class="toast.type === 'success' ? 'border-emerald-500/50 shadow-[0_10px_40px_rgba(16,185,129,0.2)]' : 'border-red-500/50 shadow-[0_10px_40px_rgba(239,68,68,0.2)]'"
+      >
+        <div 
+          class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+          :class="toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'"
         >
-          <span class="relative z-10">{{ isVerifyingPayment ? 'Processing...' : 'Simulate Payment (Dev)' }}</span>
-        </button>
+          <CheckCircle2 v-if="toast.type === 'success'" class="w-6 h-6" />
+          <AlertCircle v-else class="w-6 h-6" />
+        </div>
+        <p class="text-white font-bold text-sm pr-4">{{ toast.message }}</p>
       </div>
     </div>
 
