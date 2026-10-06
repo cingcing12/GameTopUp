@@ -1,47 +1,41 @@
 const express = require('express');
 const router = express.Router();
-const { BakongKHQR, khqrData, MerchantInfo } = require('bakong-khqr');
-const QRCode = require('qrcode');
+// We no longer need the local 'bakong-khqr' and 'qrcode' packages 
+// since the API handles generation and image creation for us.
+
+const API_BASE = "https://lorndavid.online";
 
 // Generate a Dynamic KHQR Code for a specific amount
 router.post('/generate', async (req, res) => {
   const { amount, storeLabel } = req.body;
 
   try {
-    const optionalData = {
-      currency: khqrData.currency.usd,
-      amount: parseFloat(amount),
-      storeLabel: storeLabel || 'Game Topup',
-      terminalLabel: 'Web Checkout',
-      expirationTimestamp: Date.now() + (15 * 60 * 1000) // 15 mins expiry
-    };
+    const response = await fetch(`${API_BASE}/api/v1/khqr/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: process.env.BAKONG_ID || "sokpheak_vong@bkrt",
+        merchantName: process.env.BAKONG_MERCHANT_NAME || "GameTopup",
+        amount: parseFloat(amount),
+        currency: "USD",
+        billNumber: `INV-${Date.now().toString().slice(-6)}`,
+        storeLabel: storeLabel || "GameTopup"
+      })
+    });
 
-    const merchantInfo = new MerchantInfo(
-      process.env.BAKONG_ID || 'sokpheak_vong@bkrt',
-      process.env.BAKONG_MERCHANT_NAME || 'Vong Sokpheak',
-      'Phnom Penh',
-      process.env.BAKONG_ACQUIRER_ID || '12345678', // e.g. ABA Acquiring ID
-      process.env.BAKONG_MERCHANT_ID || 'MERCHANT123',
-      optionalData
-    );
+    const data = await response.json();
 
-    const khqr = new BakongKHQR();
-    const response = khqr.generateMerchant(merchantInfo);
-
-    if (response.status.code === 0 && response.data) {
-      // Generate base64 image from the KHQR string
-      const qrImage = await QRCode.toDataURL(response.data.qr);
-      
+    if (response.ok && data.qr && data.md5) {
       res.json({
         success: true,
-        qrString: response.data.qr,
-        qrImage: qrImage,
-        md5: response.data.md5,
+        qrString: data.qr,
+        qrImage: data.qrImage, // The API provides the base64 image directly
+        md5: data.md5,
         amount: amount,
         expiresIn: '15 mins'
       });
     } else {
-      res.status(400).json({ success: false, message: response.status.message });
+      res.status(400).json({ success: false, message: data.message || "Failed to generate QR" });
     }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -57,33 +51,15 @@ router.post('/check', async (req, res) => {
   }
 
   try {
-    const token = process.env.BAKONG_TOKEN;
-    const apiUrl = process.env.BAKONG_OPENAPI_URL || 'https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5';
-    
-    // Fallback for development if token is not set/valid, we can simulate success or error
-    if (!token) {
-        return res.status(400).json({ success: false, message: 'Bakong API Token not configured.' });
-    }
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ md5 })
-    });
-
+    const response = await fetch(`${API_BASE}/api/v1/check/${md5}`);
     const data = await response.json();
     
-    // Log the exact response from Bakong to see what it's returning
-    console.log('Bakong Check Response:', JSON.stringify(data));
+    // Log the exact response from the new API to see what it's returning
+    console.log('Lorndavid API Check Response:', JSON.stringify(data));
 
-    // Usually Bakong Open API returns { responseCode: 0, responseMessage: "Success", data: {...} }
-    // We use loose equality (==) in case the API returns a string "0" instead of an integer 0
+    // The new API returns responseCode: 0 for success
     if (data.responseCode == 0 || data.errorCode == 0 || data.code == 0) {
-      // Some bank APIs return responseCode 0 for any successful API call, 
-      // but the actual payment status is inside data.status
+      // Just in case there is a nested transaction status check
       const txStatus = data.data?.status || data.transactionStatus || data.data?.transactionStatus;
       if (txStatus && txStatus.toString().toUpperCase() !== 'SUCCESS') {
         return res.json({ success: false, message: 'Payment not successful yet', status: txStatus, error: data });
