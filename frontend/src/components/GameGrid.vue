@@ -9,9 +9,10 @@ const searchQuery = ref('')
 const isLoading = ref(true)
 
 const filteredGames = computed(() => {
-  if (!searchQuery.value) return games.value
+  let activeGames = games.value.filter(g => g.isActive !== false)
+  if (!searchQuery.value) return activeGames
   const lowerCaseQuery = searchQuery.value.toLowerCase()
-  return games.value.filter(game => 
+  return activeGames.filter(game => 
     game.name.toLowerCase().includes(lowerCaseQuery)
   )
 })

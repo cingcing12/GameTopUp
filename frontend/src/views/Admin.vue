@@ -447,6 +447,33 @@ const saveGameApi = async (game) => {
   }
 }
 
+const toggleGameStatus = async (game) => {
+  isSavingGameData.value[game._id] = true
+  const newStatus = game.isActive === false ? true : false
+  
+  try {
+    const formData = new FormData()
+    formData.append('isActive', newStatus)
+    
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await fetch(`${apiUrl}/api/games/${game._id}`, {
+      method: 'PUT',
+      body: formData
+    })
+    
+    if (res.ok) {
+      game.isActive = newStatus
+      showToast(newStatus ? 'Game Published!' : 'Game Hidden!', 'success')
+    } else {
+      showToast('Error updating status', 'error')
+    }
+  } catch (error) {
+    showToast('Error updating status', 'error')
+  } finally {
+    isSavingGameData.value[game._id] = false
+  }
+}
+
 const handleImageUpload = async (event, game, type = 'image') => {
   const file = event.target.files[0]
   if (!file) return
@@ -1031,6 +1058,20 @@ const formatDate = (dateString) => {
                       placeholder="e.g. mobile-legends"
                       class="w-32 bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:border-primary outline-none" 
                     />
+                  </div>
+
+                  <div class="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
+                    <span class="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                      Status
+                      <RefreshCw v-if="isSavingGameData[game._id]" class="w-3 h-3 animate-spin text-primary" />
+                    </span>
+                    <button 
+                      @click="toggleGameStatus(game)"
+                      :class="game.isActive !== false ? 'bg-primary/20 text-primary border-primary/50' : 'bg-red-500/20 text-red-500 border-red-500/50'"
+                      class="border rounded-lg px-3 py-1 text-xs font-bold transition-all"
+                    >
+                      {{ game.isActive !== false ? 'Published' : 'Hidden' }}
+                    </button>
                   </div>
 
                   <div class="flex items-center justify-between mt-2 pt-2 border-t border-white/5">

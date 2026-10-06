@@ -20,6 +20,10 @@ const gameSchema = new mongoose.Schema({
     type: String, 
     default: 'mobile-legends',
     description: 'The slug used by RapidAPI to validate user IDs (e.g., mobile-legends, freefire)'
+  },
+  isActive: {
+    type: Boolean,
+    default: true
   }
 }, { timestamps: true });
 
