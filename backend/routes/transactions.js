@@ -77,7 +77,7 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// Get transaction history (latest 10)
+// Get transaction history (latest 50)
 router.get('/', requireAuth, async (req, res) => {
   try {
     let filter = {};
@@ -88,6 +88,7 @@ router.get('/', requireAuth, async (req, res) => {
     }
     
     const transactions = await Transaction.find(filter)
+      .populate('gameId', 'name image publisher')
       .sort({ createdAt: -1 })
       .limit(50);
     res.json(transactions);

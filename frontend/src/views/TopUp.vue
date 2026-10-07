@@ -30,7 +30,7 @@ const isLoading = ref(true)
 const needsZoneId = computed(() => {
   if (!gameInfo.value.name) return false
   const name = gameInfo.value.name.toLowerCase()
-  return name.includes('mobile legends') || name.includes('genshin')
+  return name.includes('mobile legends') || name.includes('genshin') || name.includes('magic chess')
 })
 
 // No mock fallback packages used

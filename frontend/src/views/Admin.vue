@@ -94,6 +94,77 @@ const logoutAdmin = () => {
 const activeTab = ref('dashboard')
 const transactions = ref([])
 const games = ref([])
+const searchQueryGames = ref('')
+const filteredGamesList = computed(() => {
+  if (!searchQueryGames.value) return games.value
+  const q = searchQueryGames.value.toLowerCase()
+  return games.value.filter(g => 
+    (g.name && g.name.toLowerCase().includes(q)) || 
+    (g.publisher && g.publisher.toLowerCase().includes(q))
+  )
+})
+
+// MooGold Import State
+const showMoogoldModal = ref(false)
+const moogoldGames = ref([])
+const searchMoogoldQuery = ref('')
+const isFetchingMoogold = ref(false)
+
+const filteredMoogoldGames = computed(() => {
+  if (!searchMoogoldQuery.value) return moogoldGames.value
+  const q = searchMoogoldQuery.value.toLowerCase()
+  return moogoldGames.value.filter(g => g.post_title && g.post_title.toLowerCase().includes(q))
+})
+
+const openMoogoldModal = async () => {
+  showMoogoldModal.value = true
+  if (moogoldGames.value.length === 0) {
+    isFetchingMoogold.value = true
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+      const res = await fetch(`${apiUrl}/api/moogold/games`)
+      if (res.ok) {
+        moogoldGames.value = await res.json()
+      }
+    } catch (error) {
+      showToast('Failed to fetch MooGold games', 'error')
+    } finally {
+      isFetchingMoogold.value = false
+    }
+  }
+}
+
+const importGame = async (mgGame) => {
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await fetch(`${apiUrl}/api/games`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+      },
+      body: JSON.stringify({
+        name: mgGame.post_title,
+        moogoldId: mgGame.ID,
+        publisher: 'MooGold',
+        image: 'https://images.unsplash.com/photo-1552820728-8b83bb6b773f?auto=format&fit=crop&w=600&q=80', // Default placeholder
+        isActive: false
+      })
+    })
+    
+    if (res.ok) {
+      const newGame = await res.json()
+      games.value.push(newGame)
+      showToast(`${mgGame.post_title} imported!`, 'success')
+      showMoogoldModal.value = false
+    } else {
+      showToast('Failed to import game', 'error')
+    }
+  } catch (error) {
+    showToast('Error importing game', 'error')
+  }
+}
+
 const users = ref([])
 const isFetchingUsers = ref(false)
 const selectedUserTransactions = ref(null)
@@ -401,6 +472,11 @@ const fetchTransactions = async () => {
     const data = await res.json()
     if (res.ok) {
       transactions.value = data
+    } else if (res.status === 401) {
+      isAdmin.value = false
+      localStorage.removeItem('isAdmin')
+      localStorage.removeItem('adminToken')
+      showToast('Session expired. Please log in again.', 'error')
     }
     
     // Also fetch games
@@ -428,6 +504,7 @@ const saveGameApi = async (game) => {
   try {
     const formData = new FormData()
     formData.append('rapidApiId', game.rapidApiId)
+    formData.append('publisher', game.publisher)
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     const res = await fetch(`${apiUrl}/api/games/${game._id}`, {
@@ -436,12 +513,12 @@ const saveGameApi = async (game) => {
     })
     
     if (res.ok) {
-      showToast('API slug updated successfully!', 'success')
+      showToast('Game info updated successfully!', 'success')
     } else {
-      showToast('Error updating API slug', 'error')
+      showToast('Error updating game info', 'error')
     }
   } catch (error) {
-    showToast('Error updating API slug', 'error')
+    showToast('Error updating game info', 'error')
   } finally {
     isSavingGameData.value[game._id] = false
   }
@@ -914,7 +991,7 @@ const formatDate = (dateString) => {
               <thead class="text-xs text-gray-300 uppercase bg-white/5 border-b border-white/5">
                 <tr>
                   <th scope="col" class="px-6 py-4 font-semibold">Date</th>
-                  <th scope="col" class="px-6 py-4 font-semibold">Player ID / Zone</th>
+                  <th scope="col" class="px-6 py-4 font-semibold">Game / Account</th>
                   <th scope="col" class="px-6 py-4 font-semibold">Item</th>
                   <th scope="col" class="px-6 py-4 font-semibold">Amount</th>
                   <th scope="col" class="px-6 py-4 font-semibold">Payment</th>
@@ -942,8 +1019,9 @@ const formatDate = (dateString) => {
                     {{ formatDate(tx.createdAt) }}
                   </td>
                   <td class="px-6 py-4">
-                    <div class="font-bold text-white">{{ tx.playerId }}</div>
-                    <div class="text-xs text-gray-500 mt-1">Zone: {{ tx.serverId || 'N/A' }}</div>
+                    <div class="font-bold text-white mb-1">{{ tx.gameId?.name || 'Unknown Game' }}</div>
+                    <div class="text-sm font-semibold text-gray-300">ID: {{ tx.playerId }}</div>
+                    <div class="text-xs text-gray-500 mt-0.5" v-if="tx.serverId">Zone: {{ tx.serverId }}</div>
                   </td>
                   <td class="px-6 py-4 text-white font-medium">
                     {{ tx.amount }} Diamonds
@@ -1002,13 +1080,31 @@ const formatDate = (dateString) => {
         <!-- Games Manager Section -->
         <div v-if="activeTab === 'games'" class="animate-fade-in">
           <div class="glass-card border border-white/10 bg-white/[0.02] backdrop-blur-md rounded-2xl overflow-hidden shadow-2xl p-6">
-            <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-              <ImageIcon class="w-6 h-6 text-primary" />
-              Game Cover Photos
-            </h2>
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                <ImageIcon class="w-6 h-6 text-primary" />
+                Game Cover Photos
+              </h2>
+              
+              <div class="flex items-center gap-4 w-full md:w-auto">
+                <div class="relative w-full md:w-64">
+                  <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input 
+                    type="text" 
+                    v-model="searchQueryGames" 
+                    placeholder="Search local games..." 
+                    class="w-full bg-darker/50 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                  />
+                </div>
+                
+                <button @click="openMoogoldModal" class="bg-primary hover:bg-primary/90 text-darker font-bold py-2 px-4 rounded-xl transition-all whitespace-nowrap flex items-center gap-2">
+                  <Plus class="w-4 h-4" /> Import from MooGold
+                </button>
+              </div>
+            </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div v-for="game in games" :key="game._id" class="bg-darker/90 border border-white/10 rounded-2xl p-4 flex flex-col relative overflow-hidden group hover:border-primary/50 transition-all">
+              <div v-for="game in filteredGamesList" :key="game._id" class="bg-darker/90 border border-white/10 rounded-2xl p-4 flex flex-col relative overflow-hidden group hover:border-primary/50 transition-all">
                 
                 <!-- Banner Background Preview -->
                 <div v-if="game.banner" class="absolute inset-0 z-0 opacity-30">
@@ -1042,7 +1138,12 @@ const formatDate = (dateString) => {
                 </div>
                 
                 <h3 class="text-lg font-bold text-white font-outfit">{{ game.name }}</h3>
-                <p class="text-sm text-gray-400 font-semibold mb-4">{{ game.publisher }}</p>
+                <input 
+                  v-model="game.publisher"
+                  @change="saveGameApi(game)"
+                  class="bg-transparent border-b border-transparent hover:border-white/20 focus:border-primary focus:bg-white/5 rounded px-1 -mx-1 text-sm text-gray-400 font-semibold mb-4 outline-none transition-all w-full"
+                  placeholder="Publisher name"
+                />
 
                 <!-- Banner Upload -->
                 <div class="mt-auto pt-4 border-t border-white/10 flex flex-col gap-3">
@@ -1529,5 +1630,55 @@ const formatDate = (dateString) => {
         <p class="text-white font-bold text-sm pr-4">{{ toast.message }}</p>
       </div>
     </div>
+    <!-- MooGold Import Modal -->
+    <div v-if="showMoogoldModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showMoogoldModal = false"></div>
+      
+      <div class="relative bg-darker border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
+        <div class="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+          <h3 class="text-xl font-bold text-white flex items-center gap-2">
+            <Plus class="w-5 h-5 text-primary" />
+            Import Game from MooGold
+          </h3>
+          <button @click="showMoogoldModal = false" class="text-gray-400 hover:text-white transition-colors">
+            <XCircle class="w-6 h-6" />
+          </button>
+        </div>
+        
+        <div class="p-6 border-b border-white/10">
+          <div class="relative w-full">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input 
+              type="text" 
+              v-model="searchMoogoldQuery" 
+              placeholder="Search MooGold games..." 
+              class="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+            />
+          </div>
+        </div>
+        
+        <div class="p-6 overflow-y-auto flex-1">
+          <div v-if="isFetchingMoogold" class="flex flex-col items-center justify-center py-12 text-gray-400">
+            <RefreshCw class="w-8 h-8 animate-spin mb-4 text-primary" />
+            <p>Fetching games from MooGold API...</p>
+          </div>
+          <div v-else-if="filteredMoogoldGames.length === 0" class="text-center py-8 text-gray-500">
+            No games found.
+          </div>
+          <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div v-for="mgGame in filteredMoogoldGames" :key="mgGame.ID" class="bg-black/40 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:border-primary/50 transition-all">
+              <div class="flex-1 truncate pr-4">
+                <p class="text-white font-semibold truncate">{{ mgGame.post_title }}</p>
+                <p class="text-xs text-gray-500">ID: {{ mgGame.ID }}</p>
+              </div>
+              <button @click="importGame(mgGame)" class="bg-primary/20 text-primary hover:bg-primary hover:text-darker border border-primary/50 px-3 py-1.5 rounded-lg text-sm font-bold transition-all opacity-0 group-hover:opacity-100 focus:opacity-100">
+                Import
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>

@@ -42,6 +42,18 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Create a new game
+router.post('/', async (req, res) => {
+  try {
+    const newGame = new Game(req.body);
+    const savedGame = await newGame.save();
+    sendEvent('game_created', savedGame);
+    res.status(201).json(savedGame);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Seed some initial games if empty (for testing)
 router.post('/seed', async (req, res) => {
   try {

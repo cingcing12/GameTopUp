@@ -22,6 +22,9 @@ const fetchTransactions = async () => {
     const data = await res.json()
     if (res.ok) {
       transactions.value = data
+    } else if (res.status === 401) {
+      logout()
+      window.location.href = '/login'
     }
   } catch (error) {
     console.error('Failed to fetch history', error)
@@ -78,13 +81,14 @@ const formatDate = (dateString) => {
         <div v-for="tx in transactions" :key="tx._id" class="glass-card bg-[#12121a]/80 backdrop-blur-xl rounded-2xl p-6 border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-primary/30 transition-all hover:shadow-[0_8px_30px_rgba(255,215,0,0.1)] hover:-translate-y-1">
           
           <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-inner border border-white/5" 
-                 :class="tx.status === 'completed' ? 'bg-green-500/10 text-green-400' : tx.status === 'failed' ? 'bg-red-500/10 text-red-400' : 'bg-yellow-500/10 text-yellow-400'">
-              {{ tx.status === 'completed' ? '✓' : tx.status === 'failed' ? '✗' : '⏱' }}
+            <img v-if="tx.gameId?.image" :src="tx.gameId.image" class="w-12 h-12 rounded-xl object-cover shadow-inner border border-white/5" />
+            <div v-else class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-inner border border-white/5 bg-white/5 text-gray-400">
+              🎮
             </div>
             <div>
-              <h3 class="font-bold text-white text-lg">Player ID: {{ tx.playerId }}</h3>
-              <p class="text-sm text-gray-400">{{ formatDate(tx.createdAt) }}</p>
+              <h3 class="font-bold text-white text-lg">{{ tx.gameId?.name || 'Unknown Game' }}</h3>
+              <p class="text-sm text-gray-300 font-semibold mb-0.5">ID: {{ tx.playerId }} <span v-if="tx.serverId">({{ tx.serverId }})</span></p>
+              <p class="text-xs text-gray-500">{{ formatDate(tx.createdAt) }}</p>
             </div>
           </div>
 
