@@ -125,6 +125,18 @@ router.put('/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'banne
   }
 });
 
+// Delete a game
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Game.findByIdAndDelete(id);
+    sendEvent('game_deleted', { _id: id });
+    res.json({ message: 'Game deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Update custom prices
 router.put('/:id/prices', async (req, res) => {
   try {

@@ -455,6 +455,33 @@ const savePrices = async () => {
   }
 }
 
+const deleteGame = (game) => {
+  openConfirmDialog(
+    'Delete Game',
+    `Are you sure you want to delete ${game.name}? This action cannot be undone.`,
+    'Delete',
+    true, // isDestructive
+    async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+        const res = await fetch(`${apiUrl}/api/games/${game._id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        })
+        
+        if (res.ok) {
+          showToast('Game deleted successfully', 'success')
+          games.value = games.value.filter(g => g._id !== game._id)
+        } else {
+          showToast('Failed to delete game', 'error')
+        }
+      } catch (error) {
+        showToast('Error deleting game', 'error')
+      }
+    }
+  )
+}
+
 const showToast = (message, type = 'success') => {
   if (toastTimeout) clearTimeout(toastTimeout);
   toast.value = { show: true, message, type };
@@ -1233,6 +1260,10 @@ const formatDate = (dateString) => {
                   <button @click="openPricingModal(game)" class="w-full bg-white/5 border border-white/10 hover:bg-primary/20 hover:text-primary hover:border-primary/50 text-gray-300 transition-all px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2">
                     <DollarSign class="w-4 h-4" />
                     Manage Prices
+                  </button>
+                  <button @click="deleteGame(game)" class="w-full mt-2 bg-white/5 border border-white/10 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50 text-gray-300 transition-all px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2">
+                    <Trash2 class="w-4 h-4" />
+                    Delete Game
                   </button>
                 </div>
                 </div>

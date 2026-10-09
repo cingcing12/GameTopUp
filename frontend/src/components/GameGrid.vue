@@ -23,16 +23,8 @@ const fetchGames = async () => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     const res = await fetch(`${apiUrl}/api/games`)
     const data = await res.json()
-    if (res.ok && data.length > 0) {
+    if (res.ok) {
       games.value = data;
-    } else {
-      // Fallback if DB is empty
-      games.value = [
-        { _id: '15145', name: 'Mobile Legends: Bang Bang', publisher: 'Moonton', image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=600&q=80' },
-        { _id: '7847', name: 'Free Fire', publisher: 'Garena', image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80' },
-        { _id: '6963', name: 'PUBG Mobile', publisher: 'Tencent', image: 'https://images.unsplash.com/photo-1552820728-8b83bb6b773f?auto=format&fit=crop&w=600&q=80' },
-        { _id: '173557', name: 'Honor of Kings', publisher: 'Tencent', image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80' }
-      ]
     }
   } catch (error) {
     console.error("Failed to fetch games", error)
