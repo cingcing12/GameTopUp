@@ -13,7 +13,9 @@ const gameInfo = ref({
   name: '',
   publisher: '',
   image: '', 
-  banner: ''
+  banner: '',
+  currencyImage: '',
+  customImages: {}
 })
 
 // Form state
@@ -112,6 +114,8 @@ onMounted(async () => {
       gameInfo.value.publisher = dbGame.publisher;
       gameInfo.value.image = dbGame.image;
       gameInfo.value.banner = dbGame.banner || officialGameBanners[dbGame.moogoldId || gameId] || gameInfo.value.banner;
+      gameInfo.value.currencyImage = dbGame.currencyImage || '💎';
+      gameInfo.value.customImages = dbGame.customImages || {};
       
       // Use the proper MooGold ID
       const moogoldProductId = dbGame.moogoldId || gameId;
@@ -146,6 +150,12 @@ onMounted(async () => {
       gameInfo.value.image = updatedGame.image;
       if (updatedGame.banner) {
         gameInfo.value.banner = updatedGame.banner;
+      }
+      if (updatedGame.currencyImage) {
+        gameInfo.value.currencyImage = updatedGame.currencyImage;
+      }
+      if (updatedGame.customImages) {
+        gameInfo.value.customImages = updatedGame.customImages;
       }
     }
   });
@@ -579,7 +589,11 @@ const confirmPaymentAndTopUp = async () => {
 
               <!-- Icon & Amount -->
               <div class="mt-1">
-                <div class="text-xl mb-1 transform transition-transform group-hover:scale-110 origin-left inline-block">{{ pkg.icon }}</div>
+                <div class="text-xl mb-3 transform transition-transform group-hover:scale-105 origin-left flex items-center h-14 w-28">
+                  <img v-if="gameInfo.customImages?.[pkg.id]" :src="gameInfo.customImages[pkg.id]" class="w-full h-full object-contain object-left rounded shadow-sm drop-shadow-md" />
+                  <img v-else-if="gameInfo.currencyImage && gameInfo.currencyImage.startsWith('http')" :src="gameInfo.currencyImage" class="w-8 h-8 object-contain object-left" />
+                  <span v-else>{{ gameInfo.currencyImage || pkg.icon }}</span>
+                </div>
                 <div class="font-semibold text-white text-sm leading-tight">{{ pkg.name }}</div>
                 <div v-if="pkg.bonus" class="text-[10px] text-primary font-medium mt-0.5">{{ pkg.bonus }}</div>
               </div>

@@ -143,5 +143,32 @@ router.put('/:id/prices', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+// Upload custom image for a specific package
+router.post('/:id/packages/:variationId/image', upload.single('image'), async (req, res) => {
+  try {
+    const { id, variationId } = req.params;
+    
+    if (!req.file) {
+      return res.status(400).json({ message: 'No image uploaded' });
+    }
+
+    const game = await Game.findById(id);
+    if (!game) return res.status(404).json({ message: 'Game not found' });
+
+    // Initialize customImages map if it doesn't exist
+    if (!game.customImages) {
+      game.customImages = new Map();
+    }
+    
+    // Set the Cloudinary URL for this specific variation
+    game.customImages.set(variationId, req.file.path);
+    await game.save();
+
+    sendEvent('game_updated', game);
+    res.json(game);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 
 module.exports = router;

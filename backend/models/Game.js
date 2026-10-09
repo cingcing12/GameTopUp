@@ -5,6 +5,7 @@ const gameSchema = new mongoose.Schema({
   publisher: { type: String, required: true },
   image: { type: String, required: true },
   banner: { type: String },
+  currencyImage: { type: String, default: '💎' },
   moogoldId: { type: String },
   denominations: [{
     amount: { type: Number, required: true }, // e.g., 100 Diamonds
@@ -14,6 +15,11 @@ const gameSchema = new mongoose.Schema({
   customPrices: {
     type: Map,
     of: Number,
+    default: {}
+  },
+  customImages: {
+    type: Map,
+    of: String,
     default: {}
   },
   rapidApiId: { 

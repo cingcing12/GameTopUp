@@ -305,6 +305,7 @@ const searchQuery = ref('')
 const isUploading = ref({}) // track upload state per game id
 const isUploadingBanner = ref({}) // track upload state for banner
 const isUploadingSlider = ref({}) // track upload state for slider
+const isUploadingPackageImage = ref({}) // track upload state per package id
 const isSavingGameData = ref({}) // track save state for game data
 
 // Slider CRUD state
@@ -411,7 +412,8 @@ const openPricingModal = async (game) => {
             id: v.variation_id,
             name: cleanName,
             originalPrice: parseFloat(v.original_price || v.variation_price),
-            customPrice: parseFloat(v.variation_price)
+            customPrice: parseFloat(v.variation_price),
+            customImage: game.customImages && game.customImages[v.variation_id] ? game.customImages[v.variation_id] : null
           }
       })
     }
@@ -505,6 +507,7 @@ const saveGameApi = async (game) => {
     const formData = new FormData()
     formData.append('rapidApiId', game.rapidApiId)
     formData.append('publisher', game.publisher)
+    if (game.currencyImage !== undefined) formData.append('currencyImage', game.currencyImage)
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     const res = await fetch(`${apiUrl}/api/games/${game._id}`, {
@@ -584,6 +587,43 @@ const handleImageUpload = async (event, game, type = 'image') => {
   } finally {
     if (type === 'banner') isUploadingBanner.value[game._id] = false
     else isUploading.value[game._id] = false
+  }
+}
+
+const handlePackageImageUpload = async (event, pkg) => {
+  const file = event.target.files[0]
+  if (!file || !selectedGameForPricing.value) return
+  
+  isUploadingPackageImage.value[pkg.id] = true
+  
+  try {
+    const formData = new FormData()
+    formData.append('image', file)
+    
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await fetch(`${apiUrl}/api/games/${selectedGameForPricing.value._id}/packages/${pkg.id}/image`, {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (res.ok) {
+      const updatedGame = await res.json()
+      const index = games.value.findIndex(g => g._id === updatedGame._id)
+      if (index !== -1) {
+        games.value[index] = updatedGame
+      }
+      if (updatedGame.customImages && updatedGame.customImages[pkg.id]) {
+        pkg.customImage = updatedGame.customImages[pkg.id]
+      }
+      showToast('Package image uploaded successfully!', 'success');
+    } else {
+      showToast('Error uploading package image', 'error');
+    }
+  } catch (error) {
+    console.error("Error uploading package image", error)
+    showToast('Error uploading package image', 'error')
+  } finally {
+    isUploadingPackageImage.value[pkg.id] = false
   }
 }
 
@@ -1144,7 +1184,6 @@ const formatDate = (dateString) => {
                   class="bg-transparent border-b border-transparent hover:border-white/20 focus:border-primary focus:bg-white/5 rounded px-1 -mx-1 text-sm text-gray-400 font-semibold mb-4 outline-none transition-all w-full"
                   placeholder="Publisher name"
                 />
-
                 <!-- Banner Upload -->
                 <div class="mt-auto pt-4 border-t border-white/10 flex flex-col gap-3">
                   <div class="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
@@ -1385,7 +1424,26 @@ const formatDate = (dateString) => {
         
         <div v-else class="space-y-4 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
           <div v-for="pkg in gamePackages" :key="pkg.id" class="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div class="font-bold text-white text-sm md:w-1/3">{{ pkg.name }}</div>
+            <div class="font-bold text-white text-sm md:w-1/3 flex items-center gap-3">
+              <div class="relative w-10 h-10 shrink-0 bg-black/50 border border-white/10 rounded-lg overflow-hidden group">
+                <img v-if="pkg.customImage" :src="pkg.customImage" class="w-full h-full object-contain" />
+                <div v-else class="w-full h-full flex items-center justify-center text-xl">💎</div>
+                
+                <label :for="'pkg-img-' + pkg.id" class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity backdrop-blur-sm">
+                  <RefreshCw v-if="isUploadingPackageImage[pkg.id]" class="w-4 h-4 text-primary animate-spin" />
+                  <UploadCloud v-else class="w-4 h-4 text-white" />
+                </label>
+                <input 
+                  :id="'pkg-img-' + pkg.id" 
+                  type="file" 
+                  accept="image/*" 
+                  class="hidden" 
+                  @change="(e) => handlePackageImageUpload(e, pkg)"
+                  :disabled="isUploadingPackageImage[pkg.id]"
+                />
+              </div>
+              {{ pkg.name }}
+            </div>
             
             <div class="flex items-center justify-between md:justify-end gap-6 w-full md:w-2/3">
               <div class="flex flex-col text-left md:text-right">
