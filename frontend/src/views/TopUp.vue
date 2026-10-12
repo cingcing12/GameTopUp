@@ -102,6 +102,8 @@ const formatPackages = (variationData) => {
   })
 }
 
+let sseEventSource = null
+
 onMounted(async () => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
   try {
@@ -141,8 +143,8 @@ onMounted(async () => {
   }
   
   // Real-time SSE updates
-  const eventSource = new EventSource(`${apiUrl}/api/updates/stream`);
-  eventSource.addEventListener('game_updated', (event) => {
+  sseEventSource = new EventSource(`${apiUrl}/api/updates/stream`);
+  sseEventSource.addEventListener('game_updated', (event) => {
     const updatedGame = JSON.parse(event.data);
     if (updatedGame._id === gameId) {
       gameInfo.value.name = updatedGame.name;
@@ -160,7 +162,7 @@ onMounted(async () => {
     }
   });
 
-  eventSource.addEventListener('prices_updated', async (event) => {
+  sseEventSource.addEventListener('prices_updated', async (event) => {
     const updatedGame = JSON.parse(event.data);
     if (updatedGame._id === gameId) {
       try {
@@ -174,10 +176,6 @@ onMounted(async () => {
         console.error("Error refreshing prices", err)
       }
     }
-  });
-
-  onUnmounted(() => {
-    eventSource.close();
   });
 })
 
@@ -296,63 +294,53 @@ const handleCheckout = async () => {
   
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const moogoldProductId = gameId.length === 24 ? '332' : gameId; 
 
-    // 0. Check MooGold Balance
-    try {
-      const balanceRes = await fetch(`${apiUrl}/api/moogold/balance`)
-      if (balanceRes.ok) {
-        const balanceData = await balanceRes.json()
-        const currentBalance = parseFloat(balanceData.balance || 0)
-        // Check if balance is enough (comparing Moogold balance with our retail price as a safe check, 
-        // though Moogold cost is usually lower. If it's less than retail, it's risky).
-        if (currentBalance < selectedPackage.value.price) {
-          throw new Error('System error: Insufficient provider balance. Please try again later.')
-        }
+    // 1. If player ID hasn't been validated yet, validate it first
+    if (!validatedName.value) {
+      await checkPlayerId()
+      if (idCheckError.value || !validatedName.value) {
+        throw new Error(idCheckError.value || 'Invalid Player ID')
       }
-    } catch (err) {
-      if (err.message.includes('Insufficient')) throw err;
-      console.warn('Failed to check balance, proceeding anyway:', err)
     }
 
-    // 1. Validate Player ID FIRST
-    const validateRes = await fetch(`${apiUrl}/api/moogold/validate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        product_id: moogoldProductId,
-        dbGameId: gameId.length === 24 ? gameId : null,
-        playerId: playerId.value,
-        zoneId: zoneId.value
+    // 2. Concurrently check MooGold balance & generate KHQR code (runs in parallel for ultra-fast response)
+    const balancePromise = fetch(`${apiUrl}/api/moogold/balance`)
+      .then(async (res) => {
+        if (res.ok) {
+          const balanceData = await res.json()
+          const currentBalance = parseFloat(balanceData.balance || 0)
+          if (currentBalance < selectedPackage.value.price) {
+            throw new Error('System error: Insufficient provider balance. Please try again later.')
+          }
+        }
       })
-    })
-    
-    const validateData = await validateRes.json()
-    
-    if (!validateRes.ok || validateData.err_code) {
-      throw new Error(validateData.err_message || validateData.error || validateData.message || 'Invalid Player ID')
-    } else {
-      validatedName.value = validateData.username || 'Valid Account'
-    }
+      .catch((err) => {
+        if (err.message && err.message.includes('Insufficient provider balance')) {
+          throw err
+        }
+        console.warn('Balance check warning:', err)
+      })
 
-    // 1. Generate KHQR Code
-    const qrRes = await fetch(`${apiUrl}/api/bakong/generate`, {
+    const qrPromise = fetch(`${apiUrl}/api/bakong/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         amount: selectedPackage.value.price,
         storeLabel: 'GameTopup'
       })
+    }).then(async (res) => {
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to generate QR Code')
+      }
+      return data
     })
-    
-    const qrData = await qrRes.json()
-    if (qrData.success) {
-      khqrData.value = qrData
-      khqrModalOpen.value = true
-      startCountdown()
-    } else {
-      throw new Error(qrData.message || 'Failed to generate QR Code')
-    }
+
+    const [, qrData] = await Promise.all([balancePromise, qrPromise])
+
+    khqrData.value = qrData
+    khqrModalOpen.value = true
+    startCountdown()
   } catch (error) {
     console.error(error)
     transactionError.value = error.message || 'Network Error. Could not generate QR.'
@@ -422,6 +410,7 @@ const stopCountdown = () => {
 }
 
 onUnmounted(() => {
+  if (sseEventSource) sseEventSource.close()
   stopCountdown()
 })
 

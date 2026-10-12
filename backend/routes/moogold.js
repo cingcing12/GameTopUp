@@ -250,17 +250,33 @@ router.get('/order/:order_id', async (req, res) => {
     }
 });
 
-// GET /api/moogold/balance - Check balance
+let balanceCache = { data: null, timestamp: 0 };
+const BALANCE_CACHE_TTL = 60 * 1000; // 60 seconds
+
+// GET /api/moogold/balance - Check balance (with 60s cache)
 router.get('/balance', async (req, res) => {
     try {
+        if (balanceCache.data && (Date.now() - balanceCache.timestamp < BALANCE_CACHE_TTL)) {
+            return res.json(balanceCache.data);
+        }
+
         const payload = {
             path: 'user/balance'
         };
         const data = await moogoldRequest('user/balance', 'POST', payload);
+        balanceCache = { data, timestamp: Date.now() };
         res.json(data);
     } catch (error) {
+        // If live check fails but we have stale cache, fallback to it
+        if (balanceCache.data) {
+            return res.json(balanceCache.data);
+        }
         res.status(500).json({ error: error.message });
     }
 });
 
-module.exports = { router, moogoldRequest };
+const clearBalanceCache = () => {
+    balanceCache = { data: null, timestamp: 0 };
+};
+
+module.exports = { router, moogoldRequest, clearBalanceCache };

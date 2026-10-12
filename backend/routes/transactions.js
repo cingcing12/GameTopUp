@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Transaction = require('../models/Transaction');
-const { moogoldRequest } = require('./moogold');
+const { moogoldRequest, clearBalanceCache } = require('./moogold');
 const { authMiddleware, requireAuth } = require('../middleware/auth');
 
 // Create a new transaction (top-up)
@@ -44,6 +44,7 @@ router.post('/', authMiddleware, async (req, res) => {
              savedTransaction.status = 'completed';
              savedTransaction.providerReference = moogoldResponse.transaction_id || null;
              await savedTransaction.save();
+             clearBalanceCache();
 
              return res.status(201).json({ 
                message: 'Transaction processed successfully!', 
