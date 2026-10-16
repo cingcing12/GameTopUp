@@ -1,48 +1,110 @@
 const express = require('express');
 const router = express.Router();
-// We no longer need the local 'bakong-khqr' and 'qrcode' packages 
-// since the API handles generation and image creation for us.
+const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr');
+const QRCode = require('qrcode');
 
 const API_BASE = "https://lorndavid.online";
 
-// Generate a Dynamic KHQR Code for a specific amount
+// Generate a Dynamic KHQR Code using lorndavid.online
 router.post('/generate', async (req, res) => {
   const { amount, storeLabel } = req.body;
 
+  if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
+    return res.status(400).json({ success: false, message: 'Invalid amount' });
+  }
+
+  const accountId = process.env.BAKONG_ACCOUNT || process.env.BAKONG_ID || "sokpheak_vong@bkrt";
+  const merchantName = process.env.BAKONG_MERCHANT_NAME || "GameTopup";
+  const parsedAmount = parseFloat(amount);
+  const billNumber = `INV-${Date.now().toString().slice(-6)}`;
+
+  // 1. Try lorndavid.online API first as requested
   try {
     const response = await fetch(`${API_BASE}/api/v1/khqr/generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*"
+      },
       body: JSON.stringify({
-        accountId: process.env.BAKONG_ID || "sokpheak_vong@bkrt",
-        merchantName: process.env.BAKONG_MERCHANT_NAME || "GameTopup",
-        amount: parseFloat(amount),
+        accountId: accountId,
+        merchantName: merchantName,
+        amount: parsedAmount,
         currency: "USD",
-        billNumber: `INV-${Date.now().toString().slice(-6)}`,
+        billNumber: billNumber,
         storeLabel: storeLabel || "GameTopup"
       })
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      // Cloudflare returned HTML (e.g. on Render datacenter IP)
+      console.warn('lorndavid.online returned non-JSON HTML, falling back to local generator');
+    }
 
-    if (response.ok && data.qr && data.md5) {
-      res.json({
+    if (data && (data.qr || data.qrString) && data.md5) {
+      return res.json({
         success: true,
-        qrString: data.qr,
-        qrImage: data.qrImage, // The API provides the base64 image directly
+        qrString: data.qr || data.qrString,
+        qrImage: data.qrImage || data.qrDataUrl,
         md5: data.md5,
-        amount: amount,
+        amount: parsedAmount,
         expiresIn: '15 mins'
       });
-    } else {
-      res.status(400).json({ success: false, message: data.message || "Failed to generate QR" });
     }
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.warn('lorndavid.online request error:', error.message);
   }
+
+  // 2. If lorndavid.online is blocked by Cloudflare on the server, generate standard KHQR locally so user is NEVER blocked
+  try {
+    const khqr = new BakongKHQR();
+    const individualInfo = new IndividualInfo(
+      accountId,
+      merchantName,
+      'Phnom Penh',
+      {
+        currency: khqrData.currency.usd,
+        amount: parsedAmount,
+        billNumber: billNumber,
+        storeLabel: storeLabel || 'GameTopup',
+        terminalLabel: 'Web Checkout',
+        expirationTimestamp: Date.now() + 15 * 60 * 1000 // 15 mins expiry
+      }
+    );
+    const khqrResponse = khqr.generateIndividual(individualInfo);
+
+    if (khqrResponse && khqrResponse.status && khqrResponse.status.code === 0 && khqrResponse.data) {
+      const qrImage = await QRCode.toDataURL(khqrResponse.data.qr, {
+        width: 400,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+
+      return res.json({
+        success: true,
+        qrString: khqrResponse.data.qr,
+        qrImage: qrImage,
+        md5: khqrResponse.data.md5,
+        amount: parsedAmount,
+        expiresIn: '15 mins'
+      });
+    }
+  } catch (err) {
+    console.error('Local KHQR fallback error:', err);
+  }
+
+  return res.status(500).json({ success: false, message: 'Failed to generate KHQR code' });
 });
 
-// Check Bakong Transaction via Open API
+// Check Bakong Transaction via lorndavid.online
 router.post('/check', async (req, res) => {
   const { md5 } = req.body;
 
@@ -50,32 +112,68 @@ router.post('/check', async (req, res) => {
     return res.status(400).json({ success: false, message: 'MD5 hash is required' });
   }
 
+  // 1. Primary check: lorndavid.online
   try {
-    const response = await fetch(`${API_BASE}/api/v1/check/${md5}`);
-    const data = await response.json();
-    
-    // Log the exact response from the new API to see what it's returning
-    console.log('Lorndavid API Check Response:', JSON.stringify(data));
-
-    // The new API returns responseCode: 0 for success
-    if (data.responseCode == 0 || data.errorCode == 0 || data.code == 0) {
-      // Just in case there is a nested transaction status check
-      const txStatus = data.data?.status || data.transactionStatus || data.data?.transactionStatus;
-      if (txStatus && txStatus.toString().toUpperCase() !== 'SUCCESS') {
-        return res.json({ success: false, message: 'Payment not successful yet', status: txStatus, error: data });
+    const response = await fetch(`${API_BASE}/api/v1/check/${md5}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*"
       }
+    });
 
-      return res.json({ success: true, message: 'Payment verified', data: data.data || data });
-    } else {
-      // Payment not found or not yet paid. 
-      // Return 200 OK so we don't spam the browser console with 400 errors during polling.
-      return res.json({ success: false, message: 'Payment not found or pending', error: data });
+    const text = await response.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      data = null;
+    }
+
+    if (data && (data.responseCode == 0 || data.errorCode == 0 || data.code == 0)) {
+      const txStatus = data.data?.status || data.transactionStatus || data.data?.transactionStatus;
+      if (!txStatus || txStatus.toString().toUpperCase() === 'SUCCESS') {
+        return res.json({ success: true, message: 'Payment verified', data: data.data || data });
+      }
     }
   } catch (error) {
-    console.error('Bakong Check Error:', error);
-    // Even on server error, we return 200 to prevent polling console spam, but with success: false
-    res.json({ success: false, message: error.message });
+    console.warn('lorndavid.online check error:', error.message);
   }
+
+  // 2. Secondary check: NBC OpenAPI if token configured
+  const token = process.env.BAKONG_TOKEN;
+  if (token) {
+    try {
+      const nbcUrl = process.env.BAKONG_OPENAPI_URL || 'https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5';
+      const response = await fetch(nbcUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ md5 })
+      });
+
+      const text = await response.text();
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = null;
+      }
+
+      if (data && (data.responseCode == 0 || data.errorCode == 0 || data.code == 0)) {
+        const txStatus = data.data?.status || data.transactionStatus || data.data?.transactionStatus;
+        if (!txStatus || txStatus.toString().toUpperCase() === 'SUCCESS') {
+          return res.json({ success: true, message: 'Payment verified', data: data.data || data });
+        }
+      }
+    } catch (err) {
+      console.warn('NBC check error:', err.message);
+    }
+  }
+
+  return res.json({ success: false, message: 'Payment not found or pending' });
 });
 
 module.exports = router;
+

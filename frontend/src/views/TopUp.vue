@@ -321,20 +321,71 @@ const handleCheckout = async () => {
         console.warn('Balance check warning:', err)
       })
 
-    const qrPromise = fetch(`${apiUrl}/api/bakong/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    // 2. Generate KHQR code: use lorndavid.online directly from browser for unlimited generation
+    const LORNDAVID_API = 'https://lorndavid.online'
+    const qrPromise = (async () => {
+      const billNumber = `INV-${Date.now().toString().slice(-6)}`
+      const payload = {
+        accountId: 'sokpheak_vong@bkrt',
+        merchantName: 'GameTopup',
         amount: selectedPackage.value.price,
+        currency: 'USD',
+        billNumber: billNumber,
         storeLabel: 'GameTopup'
-      })
-    }).then(async (res) => {
-      const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Failed to generate QR Code')
       }
-      return data
-    })
+
+      try {
+        const response = await fetch(`${LORNDAVID_API}/api/v1/khqr/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+
+        const text = await response.text()
+        let data = null
+        try {
+          data = JSON.parse(text)
+        } catch {
+          data = null
+        }
+
+        if (response.ok && data && (data.qr || data.qrString) && data.md5) {
+          return {
+            success: true,
+            qrString: data.qr || data.qrString,
+            qrImage: data.qrImage || data.qrDataUrl,
+            md5: data.md5,
+            amount: selectedPackage.value.price,
+            expiresIn: '15 mins'
+          }
+        }
+      } catch (clientErr) {
+        console.warn('Direct lorndavid.online call failed, trying backend fallback:', clientErr)
+      }
+
+      // Backend fallback
+      const res = await fetch(`${apiUrl}/api/bakong/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: selectedPackage.value.price,
+          storeLabel: 'GameTopup'
+        })
+      })
+
+      const resText = await res.text()
+      let backendData = null
+      try {
+        backendData = JSON.parse(resText)
+      } catch {
+        throw new Error('Payment service is temporarily unavailable. Please try again later.')
+      }
+
+      if (!res.ok || !backendData?.success) {
+        throw new Error(backendData?.message || 'Failed to generate QR Code')
+      }
+      return backendData
+    })()
 
     const [, qrData] = await Promise.all([balancePromise, qrPromise])
 
@@ -362,23 +413,53 @@ let pollingInterval = null
 
 const checkBakongPayment = async () => {
   if (!khqrData.value || !khqrData.value.md5) return;
+  const LORNDAVID_API = 'https://lorndavid.online';
   
+  // 1. Primary check: check directly via lorndavid.online from client browser (no limits)
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const res = await fetch(`${LORNDAVID_API}/api/v1/check/${khqrData.value.md5}`)
+    const text = await res.text()
+    let data = null
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
+    }
+    
+    if (data && (data.responseCode == 0 || data.errorCode == 0 || data.code == 0)) {
+      const txStatus = data.data?.status || data.transactionStatus || data.data?.transactionStatus
+      if (!txStatus || txStatus.toString().toUpperCase() === 'SUCCESS') {
+        stopCountdown()
+        await confirmPaymentAndTopUp()
+        return
+      }
+    }
+  } catch (err) {
+    // Ignore polling errors
+  }
+
+  // 2. Secondary check via backend
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     const res = await fetch(`${apiUrl}/api/bakong/check`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ md5: khqrData.value.md5 })
-    });
-    const data = await res.json();
-    
-    if (res.ok && data.success) {
-      // Payment Verified! Stop polling and trigger topup.
-      stopCountdown();
-      await confirmPaymentAndTopUp();
+    })
+    const text = await res.text()
+    let data = null
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
     }
-  } catch (err) {
-    // Silent fail for polling errors, keep trying until timeout
+    
+    if (res.ok && data?.success) {
+      stopCountdown()
+      await confirmPaymentAndTopUp()
+    }
+  } catch {
+    // Silent fail for polling errors
   }
 }
 
