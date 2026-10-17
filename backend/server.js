@@ -16,7 +16,6 @@ mongoose.connect(process.env.MONGO_URI)
 const gameRoutes = require('./routes/games');
 const transactionRoutes = require('./routes/transactions');
 const smileOneRoutes = require('./routes/smileone');
-const { router: moogoldRoutes } = require('./routes/moogold');
 const digiflazzRoutes = require('./routes/digiflazz');
 const bakongRoutes = require('./routes/bakong');
 const authRoutes = require('./routes/auth');
@@ -35,7 +34,6 @@ updatesRouter.get('/stream', (req, res) => {
 app.use('/api/games', gameRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/smileone', smileOneRoutes);
-app.use('/api/moogold', moogoldRoutes);
 app.use('/api/digiflazz', digiflazzRoutes);
 app.use('/api/bakong', bakongRoutes);
 app.use('/api/auth', authRoutes);

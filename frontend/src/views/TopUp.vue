@@ -37,100 +37,59 @@ const needsZoneId = computed(() => {
 
 // No mock fallback packages used
 
-// Official Game Image Mappings
-const officialGameImages = {
-  '15145': 'https://i.pinimg.com/736x/8f/33/c8/8f33c8c2041285cb159dc23bc20d8f07.jpg',
-  '6963': 'https://i.pinimg.com/736x/e4/df/eb/e4dfeb098e9bde765790c6efad37b5ba.jpg',
-  '7847': 'https://i.pinimg.com/736x/11/ab/c7/11abc76ccf31b853be031bb0d3a5ce08.jpg',
-  '428075': 'https://i.pinimg.com/736x/01/21/df/0121df4a7873a3df5cb4c5d33696fbcc.jpg',
-  '608055': 'https://i.pinimg.com/736x/11/cb/c2/11cbc2cc3b2ff1c9b60b7d853be02081.jpg',
-  '11641': 'https://i.pinimg.com/736x/85/3d/8e/853d8eddb58872f236df7a00f8da7905.jpg',
-  '332': 'https://play-lh.googleusercontent.com/9nFkGjM4hHwO9O69uS_oV1L2uA5hGzW3Y9QpY4l6v7F8rK7M3W-8jL-m9aL_B9BfHw',
-  '142921': 'https://i.pinimg.com/736x/2f/bc/d0/2fbcd0a158b091f0ebc5c56d11e95efd.jpg',
-  '173557': 'https://i.pinimg.com/736x/5f/15/de/5f15def2e3ab476f8f533a0058ec188c.jpg',
-  '560051': 'https://i.pinimg.com/736x/67/da/ea/67daeabb1da0b07b1d322ceecf7797e5.jpg'
-}
-
-const officialGameBanners = {
-  '15145': 'https://static.wikia.nocookie.net/mobile-legends/images/a/a2/Mobile_Legends_Bang_Bang_Key_Art.jpg',
-  '6963': 'https://w.forfun.com/fetch/f2/f2a4bc037f3747fceea0b7ccbc076d29.jpeg',
-  '7847': 'https://wallpapercave.com/wp/wp10052737.jpg',
-  '428075': 'https://images2.alphacoders.com/109/1090176.jpg',
-  '608055': 'https://wallpapercave.com/wp/wp7858074.jpg'
-}
-
-const formatPackages = (variationData) => {
-  return variationData.map(item => {
-    let rawName = item.variation_name || '';
-    let cleanName = rawName;
-    let bonus = '';
-    let tag = '';
-
-    if (cleanName.includes(' - ')) {
-        cleanName = cleanName.substring(cleanName.indexOf(' - ') + 3);
-    }
-    cleanName = cleanName.replace(/\(\#\d+\)/g, '').trim();
-    if (cleanName.includes('(First Top-Up Bonus)')) {
-        tag = 'First Top-Up';
-        cleanName = cleanName.replace('(First Top-Up Bonus)', '').trim();
-    }
-    if (cleanName.includes('+')) {
-        const parts = cleanName.split('+');
-        cleanName = parts[0].trim();
-        bonus = '+' + parts[1].trim();
-        if (!cleanName.toLowerCase().includes('diamond') && bonus.toLowerCase().includes('diamond')) {
-             cleanName += ' Diamonds'; 
-        }
-    }
-    
-    let parsedAmount = parseInt(item.variation_name);
-    if (isNaN(parsedAmount)) {
-        const match = rawName.match(/\d+/);
-        parsedAmount = match ? parseInt(match[0]) : 0;
-    }
-
-    return {
-      id: item.variation_id,
-      name: cleanName,
-      amount: parsedAmount,
-      bonus: bonus,
-      tag: tag,
-      price: parseFloat(item.variation_price) || 0,
-      icon: '💎',
-      stock_status: item.stock_status
-    }
-  })
-}
+const loadGamePackages = async (dbGame) => {
+  const brand = dbGame.digiflazzBrand || 'MOBILE LEGENDS';
+  const typeParam = dbGame.digiflazzType ? `&type=${encodeURIComponent(dbGame.digiflazzType)}` : '';
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const res = await fetch(`${apiUrl}/api/digiflazz/products?brand=${encodeURIComponent(brand)}${typeParam}`);
+  const data = await res.json();
+  
+  if (res.ok && data?.data) {
+    packages.value = data.data.map(item => {
+      const rawName = item.product_name || '';
+      const match = rawName.match(/\d+/);
+      const parsedAmount = match ? parseInt(match[0]) : 1;
+      
+      // Check for custom override price
+      const customP = dbGame.customPrices && dbGame.customPrices[item.buyer_sku_code];
+      const finalPrice = customP !== undefined ? parseFloat(customP) : item.price_usd;
+      
+      return {
+        id: item.buyer_sku_code,
+        name: item.product_name,
+        amount: parsedAmount,
+        bonus: '',
+        tag: item.type || '',
+        price: finalPrice,
+        original_price: item.price_usd,
+        price_idr: item.price_idr,
+        icon: '💎',
+        stock_status: item.status === 'Active' ? 'instock' : 'outofstock'
+      };
+    });
+  } else {
+    packages.value = [];
+  }
+};
 
 let sseEventSource = null
 
 onMounted(async () => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
   try {
-    
-    // 1. Fetch our own game data from MongoDB to get the uploaded Cloudinary cover
+    // 1. Fetch game data from MongoDB
     const dbRes = await fetch(`${apiUrl}/api/games/${gameId}`);
     if (dbRes.ok) {
       const dbGame = await dbRes.json();
       gameInfo.value.name = dbGame.name;
       gameInfo.value.publisher = dbGame.publisher;
       gameInfo.value.image = dbGame.image;
-      gameInfo.value.banner = dbGame.banner || officialGameBanners[dbGame.moogoldId || gameId] || gameInfo.value.banner;
+      gameInfo.value.banner = dbGame.banner || gameInfo.value.banner;
       gameInfo.value.currencyImage = dbGame.currencyImage || '💎';
       gameInfo.value.customImages = dbGame.customImages || {};
       
-      // Use the proper MooGold ID
-      const moogoldProductId = dbGame.moogoldId || gameId;
-
-      // 2. Fetch packages from MooGold
-      const res = await fetch(`${apiUrl}/api/moogold/products/${moogoldProductId}`)
-      const data = await res.json()
-      
-      if (res.ok && data && data.Variation) {
-        packages.value = formatPackages(data.Variation)
-      } else {
-        packages.value = [] // Remove mock data fallback
-      }
+      // Load Digiflazz packages
+      await loadGamePackages(dbGame);
     } else {
       packages.value = []
     }
@@ -166,12 +125,7 @@ onMounted(async () => {
     const updatedGame = JSON.parse(event.data);
     if (updatedGame._id === gameId) {
       try {
-        const moogoldProductId = updatedGame.moogoldId || gameId;
-        const res = await fetch(`${apiUrl}/api/moogold/products/${moogoldProductId}?ts=${Date.now()}`)
-        const data = await res.json()
-        if (res.ok && data && data.Variation) {
-          packages.value = formatPackages(data.Variation)
-        }
+        await loadGamePackages(updatedGame);
       } catch (err) {
         console.error("Error refreshing prices", err)
       }
@@ -233,14 +187,12 @@ const checkPlayerId = async () => {
   
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const moogoldProductId = gameId.length === 24 ? '332' : gameId; 
 
-    const validateRes = await fetch(`${apiUrl}/api/moogold/validate`, {
+    const validateRes = await fetch(`${apiUrl}/api/digiflazz/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        product_id: moogoldProductId,
-        dbGameId: gameId.length === 24 ? gameId : null,
+        gameId: gameId.length === 24 ? gameId : null,
         playerId: playerId.value,
         zoneId: zoneId.value
       })
@@ -303,23 +255,18 @@ const handleCheckout = async () => {
       }
     }
 
-    // 2. Concurrently check MooGold balance & generate KHQR code (runs in parallel for ultra-fast response)
-    const balancePromise = fetch(`${apiUrl}/api/moogold/balance`)
-      .then(async (res) => {
-        if (res.ok) {
-          const balanceData = await res.json()
-          const currentBalance = parseFloat(balanceData.balance || 0)
-          if (currentBalance < selectedPackage.value.price) {
-            throw new Error('System error: Insufficient provider balance. Please try again later.')
-          }
-        }
-      })
-      .catch((err) => {
-        if (err.message && err.message.includes('Insufficient provider balance')) {
-          throw err
-        }
-        console.warn('Balance check warning:', err)
-      })
+    // 2. Strict Provider Balance Check: Ensure Digiflazz has enough funds before generating payment QR
+    const balanceRes = await fetch(`${apiUrl}/api/digiflazz/balance`)
+    const balanceData = await balanceRes.json()
+    const currentBalance = parseFloat(balanceData.balance_usd || balanceData.balance || 0)
+
+    if (currentBalance <= 0 || currentBalance < selectedPackage.value.price) {
+      if (currentBalance <= 0) {
+        throw new Error('Top-up service is temporarily out of stock (Insufficient provider balance). Please try again later.')
+      } else {
+        throw new Error(`Insufficient provider balance ($${currentBalance.toFixed(2)} available, package costs $${selectedPackage.value.price.toFixed(2)}). Please try again later.`)
+      }
+    }
 
     // 2. Generate KHQR code: use lorndavid.online directly from browser for unlimited generation
     const LORNDAVID_API = 'https://lorndavid.online'
@@ -387,7 +334,7 @@ const handleCheckout = async () => {
       return backendData
     })()
 
-    const [, qrData] = await Promise.all([balancePromise, qrPromise])
+    const qrData = await qrPromise
 
     khqrData.value = qrData
     khqrModalOpen.value = true
@@ -502,7 +449,7 @@ const confirmPaymentAndTopUp = async () => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     
-    // 2. Actually execute the MooGold transaction
+    // 2. Actually execute the Digiflazz transaction
     const res = await fetch(`${apiUrl}/api/transactions`, {
       method: 'POST',
       headers: { 

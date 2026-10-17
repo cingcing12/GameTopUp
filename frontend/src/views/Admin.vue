@@ -104,37 +104,41 @@ const filteredGamesList = computed(() => {
   )
 })
 
-// MooGold Import State
-const showMoogoldModal = ref(false)
-const moogoldGames = ref([])
-const searchMoogoldQuery = ref('')
-const isFetchingMoogold = ref(false)
+// Digiflazz Import State
+const showDigiflazzModal = ref(false)
+const digiflazzGames = ref([])
+const searchDigiflazzQuery = ref('')
+const isFetchingDigiflazz = ref(false)
 
-const filteredMoogoldGames = computed(() => {
-  if (!searchMoogoldQuery.value) return moogoldGames.value
-  const q = searchMoogoldQuery.value.toLowerCase()
-  return moogoldGames.value.filter(g => g.post_title && g.post_title.toLowerCase().includes(q))
+const filteredDigiflazzGames = computed(() => {
+  if (!searchDigiflazzQuery.value) return digiflazzGames.value
+  const q = searchDigiflazzQuery.value.toLowerCase()
+  return digiflazzGames.value.filter(g => 
+    (g.name && g.name.toLowerCase().includes(q)) || 
+    (g.brand && g.brand.toLowerCase().includes(q))
+  )
 })
 
-const openMoogoldModal = async () => {
-  showMoogoldModal.value = true
-  if (moogoldGames.value.length === 0) {
-    isFetchingMoogold.value = true
+const openDigiflazzModal = async () => {
+  showDigiflazzModal.value = true
+  if (digiflazzGames.value.length === 0) {
+    isFetchingDigiflazz.value = true
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-      const res = await fetch(`${apiUrl}/api/moogold/games`)
-      if (res.ok) {
-        moogoldGames.value = await res.json()
+      const res = await fetch(`${apiUrl}/api/digiflazz/games`)
+      const data = await res.json()
+      if (res.ok && data.games) {
+        digiflazzGames.value = data.games
       }
     } catch (error) {
-      showToast('Failed to fetch MooGold games', 'error')
+      showToast('Failed to fetch Digiflazz games', 'error')
     } finally {
-      isFetchingMoogold.value = false
+      isFetchingDigiflazz.value = false
     }
   }
 }
 
-const importGame = async (mgGame) => {
+const importDigiflazzGame = async (dfGame) => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     const res = await fetch(`${apiUrl}/api/games`, {
@@ -144,19 +148,22 @@ const importGame = async (mgGame) => {
         'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
       },
       body: JSON.stringify({
-        name: mgGame.post_title,
-        moogoldId: mgGame.ID,
-        publisher: 'MooGold',
-        image: 'https://images.unsplash.com/photo-1552820728-8b83bb6b773f?auto=format&fit=crop&w=600&q=80', // Default placeholder
-        isActive: false
+        name: dfGame.name,
+        publisher: 'Digiflazz',
+        provider: 'digiflazz',
+        digiflazzBrand: dfGame.brand,
+        digiflazzType: 'GLOBAL',
+        image: dfGame.sampleImage || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
+        rapidApiId: dfGame.rapidApiId || 'mobile-legends',
+        isActive: true
       })
     })
     
     if (res.ok) {
       const newGame = await res.json()
       games.value.push(newGame)
-      showToast(`${mgGame.post_title} imported!`, 'success')
-      showMoogoldModal.value = false
+      showToast(`${dfGame.name} imported from Digiflazz!`, 'success')
+      showDigiflazzModal.value = false
     } else {
       showToast('Failed to import game', 'error')
     }
@@ -388,6 +395,22 @@ const selectedGameForPricing = ref(null)
 const gamePackages = ref([])
 const isFetchingPackages = ref(false)
 const isSavingPrices = ref(false)
+const liveExchangeRate = ref(18050)
+
+const applyBulkMargin = (percent) => {
+  gamePackages.value.forEach(pkg => {
+    const margin = pkg.originalPrice * (1 + percent / 100)
+    pkg.customPrice = parseFloat(margin.toFixed(2))
+  })
+  showToast(`Applied +${percent}% profit margin to all items`, 'success')
+}
+
+const resetToOriginal = () => {
+  gamePackages.value.forEach(pkg => {
+    pkg.customPrice = pkg.originalPrice
+  })
+  showToast('Reset all sell prices to cost price', 'info')
+}
 
 const openPricingModal = async (game) => {
   selectedGameForPricing.value = game
@@ -397,25 +420,27 @@ const openPricingModal = async (game) => {
   
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const moogoldId = game.moogoldId || game._id
-    const res = await fetch(`${apiUrl}/api/moogold/products/${moogoldId}`)
-    const data = await res.json()
     
-    if (res.ok && data && data.Variation) {
-      gamePackages.value = data.Variation.map(v => {
-          let cleanName = v.variation_name || '';
-          if (cleanName.includes(' - ')) {
-              cleanName = cleanName.substring(cleanName.indexOf(' - ') + 3);
-          }
-          cleanName = cleanName.replace(/\(\#\d+\)/g, '').trim();
-          return {
-            id: v.variation_id,
-            name: cleanName,
-            originalPrice: parseFloat(v.original_price || v.variation_price),
-            customPrice: parseFloat(v.variation_price),
-            customImage: game.customImages && game.customImages[v.variation_id] ? game.customImages[v.variation_id] : null
-          }
-      })
+    const brand = game.digiflazzBrand || 'MOBILE LEGENDS';
+    const typeParam = game.digiflazzType ? `&type=${encodeURIComponent(game.digiflazzType)}` : '';
+    const res = await fetch(`${apiUrl}/api/digiflazz/products?brand=${encodeURIComponent(brand)}${typeParam}`);
+    const data = await res.json();
+    
+    if (res.ok && data?.data) {
+      if (data.exchange_rate?.rate) {
+        liveExchangeRate.value = data.exchange_rate.rate;
+      }
+      gamePackages.value = data.data.map(p => {
+        const customP = game.customPrices && game.customPrices[p.buyer_sku_code];
+        return {
+          id: p.buyer_sku_code,
+          name: p.product_name,
+          priceIdr: p.price_idr || 0,
+          originalPrice: p.price_usd,
+          customPrice: customP !== undefined ? parseFloat(customP) : p.price_usd,
+          customImage: game.customImages && game.customImages[p.buyer_sku_code] ? game.customImages[p.buyer_sku_code] : null
+        };
+      });
     }
   } catch (error) {
     showToast('Failed to fetch packages', 'error')
@@ -1164,8 +1189,8 @@ const formatDate = (dateString) => {
                   />
                 </div>
                 
-                <button @click="openMoogoldModal" class="bg-primary hover:bg-primary/90 text-darker font-bold py-2 px-4 rounded-xl transition-all whitespace-nowrap flex items-center gap-2">
-                  <Plus class="w-4 h-4" /> Import from MooGold
+                <button @click="openDigiflazzModal" class="bg-primary hover:bg-primary/90 text-darker font-bold py-2 px-4 rounded-xl transition-all whitespace-nowrap flex items-center gap-2 shadow-lg shadow-primary/20">
+                  <Plus class="w-4 h-4" /> Import from Digiflazz
                 </button>
               </div>
             </div>
@@ -1441,22 +1466,51 @@ const formatDate = (dateString) => {
 
     <!-- Pricing Modal -->
     <div v-if="showPricingModal" class="fixed inset-0 z-[150] flex items-center justify-center bg-darker/80 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto">
-      <div class="glass-card p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl w-full max-w-2xl relative my-auto">
+      <div class="glass-card p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl w-full max-w-3xl relative my-auto">
         <button @click="showPricingModal = false" class="absolute top-6 right-6 text-gray-400 hover:text-white transition-colors">
           <XCircle class="w-6 h-6" />
         </button>
         
-        <h3 class="text-2xl font-black font-outfit text-white mb-2">Manage Prices</h3>
-        <p class="text-gray-400 text-sm mb-6">Edit sell prices for {{ selectedGameForPricing?.name }}</p>
+        <h3 class="text-2xl font-black font-outfit text-white mb-1">Manage Prices & Profit</h3>
+        <p class="text-gray-400 text-sm mb-5">Edit sell prices and monitor live profit margins for {{ selectedGameForPricing?.name }}</p>
+
+        <!-- Live Conversion Rate & Bulk Markup Toolbar -->
+        <div class="mb-5 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-transparent border border-blue-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center text-lg shrink-0">
+              💱
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Live Digiflazz Rate</span>
+                <span class="px-2 py-0.2 rounded-full text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">Live Market</span>
+              </div>
+              <p class="text-white font-extrabold text-sm sm:text-base">
+                $1.00 USD = <span class="text-primary font-black">Rp {{ Number(liveExchangeRate).toLocaleString() }} IDR</span>
+              </p>
+            </div>
+          </div>
+          
+          <!-- Bulk Markup Quick Actions -->
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-[11px] text-gray-400 font-semibold mr-1">Quick Profit:</span>
+            <button @click="applyBulkMargin(5)" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-white/5 hover:bg-white/10 text-white border border-white/10 transition-all">+5%</button>
+            <button @click="applyBulkMargin(10)" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-all">+10%</button>
+            <button @click="applyBulkMargin(15)" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 transition-all">+15%</button>
+            <button @click="applyBulkMargin(20)" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 transition-all">+20%</button>
+            <button @click="resetToOriginal" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all">Reset</button>
+          </div>
+        </div>
         
         <div v-if="isFetchingPackages" class="flex justify-center py-10">
           <RefreshCw class="w-8 h-8 text-primary animate-spin" />
         </div>
         
-        <div v-else class="space-y-4 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
-          <div v-for="pkg in gamePackages" :key="pkg.id" class="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div class="font-bold text-white text-sm md:w-1/3 flex items-center gap-3">
-              <div class="relative w-10 h-10 shrink-0 bg-black/50 border border-white/10 rounded-lg overflow-hidden group">
+        <div v-else class="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+          <div v-for="pkg in gamePackages" :key="pkg.id" class="bg-white/5 border border-white/10 hover:border-white/20 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all">
+            <!-- Left: Icon & Name -->
+            <div class="font-bold text-white text-sm md:w-5/12 flex items-center gap-3">
+              <div class="relative w-11 h-11 shrink-0 bg-black/50 border border-white/10 rounded-xl overflow-hidden group">
                 <img v-if="pkg.customImage" :src="pkg.customImage" class="w-full h-full object-contain" />
                 <div v-else class="w-full h-full flex items-center justify-center text-xl">💎</div>
                 
@@ -1473,25 +1527,45 @@ const formatDate = (dateString) => {
                   :disabled="isUploadingPackageImage[pkg.id]"
                 />
               </div>
-              {{ pkg.name }}
+              <div class="truncate">
+                <p class="text-white font-semibold text-sm leading-tight truncate">{{ pkg.name }}</p>
+                <p class="text-[11px] text-gray-500 mt-0.5 font-mono">SKU: <span class="text-gray-400">{{ pkg.id }}</span></p>
+              </div>
             </div>
             
-            <div class="flex items-center justify-between md:justify-end gap-6 w-full md:w-2/3">
-              <div class="flex flex-col text-left md:text-right">
-                <span class="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Cost Price</span>
-                <span class="text-gray-300 font-bold text-sm">${{ pkg.originalPrice.toFixed(2) }}</span>
+            <!-- Right: Cost in IDR, Cost in USD, Sell For, and Profit badge -->
+            <div class="flex items-center justify-between md:justify-end gap-4 sm:gap-6 w-full md:w-7/12 flex-wrap sm:flex-nowrap">
+              <!-- Digiflazz Cost (IDR + USD) -->
+              <div class="flex flex-col text-left md:text-right shrink-0">
+                <span class="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Digiflazz Cost</span>
+                <span class="text-gray-200 font-extrabold text-sm">${{ pkg.originalPrice.toFixed(2) }}</span>
+                <span class="text-primary font-mono text-[11px]">Rp {{ Number(pkg.priceIdr || 0).toLocaleString() }}</span>
               </div>
               
-              <div class="flex items-center gap-3">
-                <span class="text-primary text-[10px] uppercase font-bold tracking-wider text-right">Sell For</span>
+              <!-- Sell Price Input + Profit Badge -->
+              <div class="flex flex-col items-end">
+                <span class="text-primary text-[10px] uppercase font-bold tracking-wider mb-1">Sell Price (USD)</span>
                 <div class="relative w-28">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">$</span>
                   <input 
                     v-model.number="pkg.customPrice" 
                     type="number" 
                     step="0.01" 
-                    class="w-full bg-[#12121a] border border-white/10 rounded-lg pl-7 pr-3 py-2 text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-sm font-bold"
+                    class="w-full bg-[#12121a] border border-white/10 rounded-xl pl-7 pr-3 py-2 text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-sm font-bold text-right"
                   />
+                </div>
+                <!-- Real-time Profit Badge -->
+                <div class="mt-1 text-[11px] font-bold">
+                  <span v-if="pkg.customPrice > pkg.originalPrice" class="text-emerald-400 flex items-center gap-0.5">
+                    +${{ (pkg.customPrice - pkg.originalPrice).toFixed(2) }} 
+                    <span class="text-emerald-500/80">({{ Math.round(((pkg.customPrice - pkg.originalPrice) / pkg.originalPrice) * 100) }}%)</span>
+                  </span>
+                  <span v-else-if="pkg.customPrice < pkg.originalPrice" class="text-red-400">
+                    -${{ (pkg.originalPrice - pkg.customPrice).toFixed(2) }} loss
+                  </span>
+                  <span v-else class="text-gray-500">
+                    0% margin (at cost)
+                  </span>
                 </div>
               </div>
             </div>
@@ -1501,11 +1575,11 @@ const formatDate = (dateString) => {
           </div>
         </div>
         
-        <div class="mt-8 flex gap-3">
+        <div class="mt-6 flex gap-3">
           <button @click="showPricingModal = false" class="flex-1 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all border border-white/10">
             Cancel
           </button>
-          <button @click="savePrices" :disabled="isSavingPrices" class="flex-1 py-3.5 rounded-xl bg-primary text-darker font-bold hover:bg-primary/90 transition-all flex items-center justify-center gap-2" :class="{'opacity-50 cursor-not-allowed': isSavingPrices}">
+          <button @click="savePrices" :disabled="isSavingPrices" class="flex-1 py-3.5 rounded-xl bg-primary text-darker font-bold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20" :class="{'opacity-50 cursor-not-allowed': isSavingPrices}">
             <RefreshCw v-if="isSavingPrices" class="w-5 h-5 animate-spin" />
             {{ isSavingPrices ? 'Saving...' : 'Save Prices' }}
           </button>
@@ -1719,17 +1793,17 @@ const formatDate = (dateString) => {
         <p class="text-white font-bold text-sm pr-4">{{ toast.message }}</p>
       </div>
     </div>
-    <!-- MooGold Import Modal -->
-    <div v-if="showMoogoldModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showMoogoldModal = false"></div>
+    <!-- Digiflazz Import Modal -->
+    <div v-if="showDigiflazzModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showDigiflazzModal = false"></div>
       
       <div class="relative bg-darker border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
         <div class="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
           <h3 class="text-xl font-bold text-white flex items-center gap-2">
-            <Plus class="w-5 h-5 text-primary" />
-            Import Game from MooGold
+            <Plus class="w-5 h-5 text-blue-400" />
+            Import Game from Digiflazz
           </h3>
-          <button @click="showMoogoldModal = false" class="text-gray-400 hover:text-white transition-colors">
+          <button @click="showDigiflazzModal = false" class="text-gray-400 hover:text-white transition-colors">
             <XCircle class="w-6 h-6" />
           </button>
         </div>
@@ -1739,28 +1813,31 @@ const formatDate = (dateString) => {
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
               type="text" 
-              v-model="searchMoogoldQuery" 
-              placeholder="Search MooGold games..." 
-              class="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              v-model="searchDigiflazzQuery" 
+              placeholder="Search Digiflazz games (e.g. Mobile Legends, Free Fire)..." 
+              class="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
             />
           </div>
         </div>
         
         <div class="p-6 overflow-y-auto flex-1">
-          <div v-if="isFetchingMoogold" class="flex flex-col items-center justify-center py-12 text-gray-400">
-            <RefreshCw class="w-8 h-8 animate-spin mb-4 text-primary" />
-            <p>Fetching games from MooGold API...</p>
+          <div v-if="isFetchingDigiflazz" class="flex flex-col items-center justify-center py-12 text-gray-400">
+            <RefreshCw class="w-8 h-8 animate-spin mb-4 text-blue-400" />
+            <p>Fetching active games from Digiflazz...</p>
           </div>
-          <div v-else-if="filteredMoogoldGames.length === 0" class="text-center py-8 text-gray-500">
+          <div v-else-if="filteredDigiflazzGames.length === 0" class="text-center py-8 text-gray-500">
             No games found.
           </div>
           <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div v-for="mgGame in filteredMoogoldGames" :key="mgGame.ID" class="bg-black/40 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:border-primary/50 transition-all">
-              <div class="flex-1 truncate pr-4">
-                <p class="text-white font-semibold truncate">{{ mgGame.post_title }}</p>
-                <p class="text-xs text-gray-500">ID: {{ mgGame.ID }}</p>
+            <div v-for="dfGame in filteredDigiflazzGames" :key="dfGame.brand" class="bg-black/40 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:border-blue-500/50 transition-all">
+              <div class="flex items-center gap-3 flex-1 truncate pr-3">
+                <img :src="dfGame.sampleImage" class="w-12 h-12 rounded-lg object-cover border border-white/10 shrink-0" />
+                <div class="truncate">
+                  <p class="text-white font-semibold truncate">{{ dfGame.name }}</p>
+                  <p class="text-xs text-blue-400 font-medium">{{ dfGame.itemsCount }} packages • {{ dfGame.types.join(', ') }}</p>
+                </div>
               </div>
-              <button @click="importGame(mgGame)" class="bg-primary/20 text-primary hover:bg-primary hover:text-darker border border-primary/50 px-3 py-1.5 rounded-lg text-sm font-bold transition-all opacity-0 group-hover:opacity-100 focus:opacity-100">
+              <button @click="importDigiflazzGame(dfGame)" class="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-500/50 px-3.5 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap">
                 Import
               </button>
             </div>
@@ -1771,3 +1848,4 @@ const formatDate = (dateString) => {
 
   </div>
 </template>
+

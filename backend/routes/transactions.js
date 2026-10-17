@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Transaction = require('../models/Transaction');
-const { moogoldRequest, clearBalanceCache } = require('./moogold');
+const Game = require('../models/Game');
+const { createDigiflazzTransaction } = require('./digiflazz');
 const { authMiddleware, requireAuth } = require('../middleware/auth');
 
 // Create a new transaction (top-up)
@@ -22,55 +23,46 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const savedTransaction = await newTransaction.save();
     
-    // Call MooGold API to process the order
+    // Process transaction directly through Digiflazz
     try {
-        const moogoldPayload = {
-            path: 'order/create_order',
-            data: {
-                category: 50, // 50 for Direct Top Up
-                'product-id': req.body.productId, // This is the variation_id
-                quantity: 1,
-                'User ID': playerId,
-                'Zone ID': serverId,
-                'Server ID': serverId,
-                'Server': serverId
-            }
-        };
+      const customerNo = serverId ? `${playerId}${serverId}` : playerId;
+      const digiRes = await createDigiflazzTransaction({
+        buyerSkuCode: productId,
+        customerNo: customerNo,
+        refId: savedTransaction._id.toString()
+      });
 
-        const moogoldResponse = await moogoldRequest('order/create_order', 'POST', moogoldPayload);
-        
-        // Check if successful
-        if (moogoldResponse && (moogoldResponse.status === true || moogoldResponse.status === 'true' || moogoldResponse.status === 'processing' || moogoldResponse.status === 'success' || (moogoldResponse.message && moogoldResponse.message.toLowerCase().includes('success')))) {
-             savedTransaction.status = 'completed';
-             savedTransaction.providerReference = moogoldResponse.transaction_id || null;
-             await savedTransaction.save();
-             clearBalanceCache();
-
-             return res.status(201).json({ 
-               message: 'Transaction processed successfully!', 
-               transaction: savedTransaction,
-               moogoldResponse
-             });
-        } else {
-             savedTransaction.status = 'failed';
-             savedTransaction.errorDetails = JSON.stringify(moogoldResponse);
-             await savedTransaction.save();
-             
-             return res.status(400).json({
-               message: moogoldResponse.err_message || moogoldResponse.message || 'MooGold rejected the transaction.',
-               error: moogoldResponse
-             });
-        }
-    } catch (moogoldError) {
-        savedTransaction.status = 'failed';
-        savedTransaction.errorDetails = moogoldError.message;
+      const status = digiRes?.status;
+      if (status === 'Sukses' || status === 'Pending') {
+        savedTransaction.status = status === 'Sukses' ? 'completed' : 'pending';
+        savedTransaction.providerReference = digiRes?.ref_id || null;
         await savedTransaction.save();
-        
-        res.status(500).json({ 
-            message: 'Transaction failed at provider.', 
-            error: moogoldError.message,
-            transaction: savedTransaction
+
+        return res.status(201).json({
+          message: 'Digiflazz transaction submitted successfully!',
+          transaction: savedTransaction,
+          providerResponse: digiRes
         });
+      } else {
+        savedTransaction.status = 'failed';
+        savedTransaction.errorDetails = digiRes?.message || 'Digiflazz rejected the transaction';
+        await savedTransaction.save();
+
+        return res.status(400).json({
+          message: digiRes?.message || 'Digiflazz rejected transaction',
+          error: digiRes
+        });
+      }
+    } catch (digiErr) {
+      savedTransaction.status = 'failed';
+      savedTransaction.errorDetails = digiErr.response?.data?.message || digiErr.message;
+      await savedTransaction.save();
+
+      return res.status(500).json({
+        message: digiErr.response?.data?.data?.message || digiErr.response?.data?.message || 'Digiflazz transaction failed',
+        error: digiErr.message,
+        transaction: savedTransaction
+      });
     }
 
   } catch (error) {

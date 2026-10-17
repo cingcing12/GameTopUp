@@ -9,7 +9,7 @@ const transactionSchema = new mongoose.Schema({
   price: { type: Number, required: true }, // How much they paid
   paymentMethod: { type: String, required: true },
   status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
-  providerReference: { type: String }, // Transaction ID from MooGold
+  providerReference: { type: String }, // Transaction ID from Digiflazz
   errorDetails: { type: String } // Error details if failed
 }, { timestamps: true });
 

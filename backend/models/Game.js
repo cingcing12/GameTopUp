@@ -6,7 +6,9 @@ const gameSchema = new mongoose.Schema({
   image: { type: String, required: true },
   banner: { type: String },
   currencyImage: { type: String, default: '💎' },
-  moogoldId: { type: String },
+  provider: { type: String, enum: ['digiflazz', 'manual'], default: 'digiflazz' },
+  digiflazzBrand: { type: String },
+  digiflazzType: { type: String, default: 'GLOBAL' },
   denominations: [{
     amount: { type: Number, required: true }, // e.g., 100 Diamonds
     price: { type: Number, required: true },  // e.g., $1.99
