@@ -128,22 +128,43 @@ const getLiveIdrRate = async () => {
     return parseFloat(process.env.IDR_TO_USD_RATE || 18053);
 };
 
+// Safe product loader with fallback
+const getProducts = async (force = false) => {
+    const now = Date.now();
+    if (!cachedProducts) {
+        try {
+            if (fs.existsSync(CACHE_FILE)) {
+                const parsed = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    cachedProducts = parsed;
+                }
+            }
+        } catch (e) {}
+    }
+
+    if (force || !cachedProducts || (now - lastFetchTime > CACHE_DURATION)) {
+        try {
+            const fresh = await fetchFromDigiflazz();
+            if (Array.isArray(fresh) && fresh.length > 0) {
+                cachedProducts = fresh;
+                lastFetchTime = now;
+            }
+        } catch (err) {
+            console.warn('[Digiflazz] Product fetch warning, using fallback cache:', err.message);
+            if (!cachedProducts || cachedProducts.length === 0) {
+                throw err;
+            }
+        }
+    }
+
+    return cachedProducts || [];
+};
+
 // Get products with optional brand filtering
 router.get('/products', async (req, res) => {
     try {
-        let products = cachedProducts;
-        const now = Date.now();
-
         const force = req.query.force === 'true';
-
-        if (force || !products || now - lastFetchTime > CACHE_DURATION) {
-            try {
-                products = await fetchFromDigiflazz();
-            } catch (fetchErr) {
-                if (!products) throw fetchErr;
-                console.warn('Force fetch failed or rate limited, falling back to cache:', fetchErr.message);
-            }
-        }
+        const products = await getProducts(force);
 
         const brandQuery = (req.query.brand || 'MOBILE LEGENDS').toUpperCase();
         const typeQuery = req.query.type ? req.query.type.toUpperCase() : null;
@@ -199,11 +220,7 @@ router.get('/products', async (req, res) => {
 // Get all unique brands available
 router.get('/brands', async (req, res) => {
     try {
-        let products = cachedProducts;
-        if (!products || Date.now() - lastFetchTime > CACHE_DURATION) {
-            products = await fetchFromDigiflazz();
-        }
-
+        const products = await getProducts();
         const brands = [...new Set(products.map(p => p.brand).filter(Boolean))].sort();
         res.json({ success: true, count: brands.length, brands });
     } catch (error) {
@@ -214,11 +231,7 @@ router.get('/brands', async (req, res) => {
 // Get available Games for Admin Import
 router.get('/games', async (req, res) => {
     try {
-        let products = cachedProducts;
-        if (!products || Date.now() - lastFetchTime > CACHE_DURATION) {
-            products = await fetchFromDigiflazz();
-        }
-
+        const products = await getProducts();
         const gameProducts = (products || []).filter(p => p.category && p.category.toLowerCase() === 'games');
         const brandMap = {};
 
