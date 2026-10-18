@@ -10,17 +10,33 @@ import {
 
 const router = useRouter()
 
+// Native, untamperable fetch reference bound before any console scripts run
+const rawFetch = (typeof window !== 'undefined' && window.fetch) ? window.fetch.bind(window) : fetch
+
 // Authentication State
 const isAdmin = ref(false)
+const isServerVerified = ref(false)
 const isVerifyingAuth = ref(true)
 const emailInput = ref('')
 const passwordInput = ref('')
+const adminPinInput = ref('')
 const loginError = ref('')
 const isLoggingIn = ref(false)
 
+// Anti-tamper watchdog: if someone flips isAdmin in Console without isServerVerified, self-destruct!
+watch(isAdmin, (newVal) => {
+  if (newVal && !isServerVerified.value) {
+    console.warn("Security Alert: Unauthorized client-side state tampering detected. Evicting session.");
+    isAdmin.value = false;
+    sessionStorage.clear();
+    localStorage.clear();
+    window.location.replace('/');
+  }
+})
+
 // Authenticated fetch wrapper that sends token and handles token expiry/unauthorized
 const authFetch = async (url, options = {}) => {
-  const token = localStorage.getItem('adminToken')
+  const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken')
   const headers = {
     ...(options.headers || {})
   }
@@ -29,10 +45,11 @@ const authFetch = async (url, options = {}) => {
   }
 
   try {
-    const res = await fetch(url, { ...options, headers })
+    const res = await rawFetch(url, { ...options, headers })
     if (res.status === 401 || res.status === 403) {
+      isServerVerified.value = false
       isAdmin.value = false
-      localStorage.removeItem('isAdmin')
+      sessionStorage.removeItem('adminToken')
       localStorage.removeItem('adminToken')
       showToast('Admin session expired or access denied. Please log in again.', 'error')
     }
@@ -44,23 +61,23 @@ const authFetch = async (url, options = {}) => {
 
 // Strictly verify the token with the server on page load
 const checkAdminAuth = async () => {
-  const token = localStorage.getItem('adminToken')
+  const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken')
   if (!token) {
     isAdmin.value = false
-    localStorage.removeItem('isAdmin')
+    isServerVerified.value = false
     isVerifyingAuth.value = false
     return false
   }
 
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/auth/me`, {
+    const res = await rawFetch(`${apiUrl}/api/auth/me`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     const data = await res.json()
     if (res.ok && data.user && data.user.role === 'admin') {
+      isServerVerified.value = true
       isAdmin.value = true
-      localStorage.setItem('isAdmin', 'true')
       isVerifyingAuth.value = false
       return true
     } else {
@@ -102,28 +119,28 @@ const handleAdminLogin = async () => {
   
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/auth/login`, {
+    const res = await rawFetch(`${apiUrl}/api/auth/admin-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: emailInput.value,
-        password: passwordInput.value
+        password: passwordInput.value,
+        adminPin: adminPinInput.value
       })
     })
     
     const data = await res.json()
     
-    if (res.ok && data.user && data.user.role === 'admin') {
+    if (res.ok && data.user && data.user.role === 'admin' && data.token) {
+      sessionStorage.setItem('adminToken', data.token)
+      localStorage.setItem('adminToken', data.token)
+      isServerVerified.value = true
       isAdmin.value = true
-      localStorage.setItem('isAdmin', 'true')
-      localStorage.setItem('adminToken', data.token) // Optionally store token for secure backend calls later
       fetchTransactions()
       fetchUsers()
       fetchPages()
-    } else if (res.ok) {
-      loginError.value = 'Access Denied: You are not an admin.'
     } else {
-      loginError.value = data.message || 'Invalid email or password'
+      loginError.value = data.message || 'Invalid admin credentials or Master PIN'
     }
   } catch (error) {
     loginError.value = 'Server connection failed.'
@@ -143,11 +160,13 @@ const confirmLogout = () => {
 }
 
 const logoutAdmin = () => {
+  isServerVerified.value = false
   isAdmin.value = false
-  localStorage.removeItem('isAdmin')
+  sessionStorage.removeItem('adminToken')
   localStorage.removeItem('adminToken')
   router.push('/')
 }
+
 
 // Dashboard State
 const activeTab = ref('dashboard')
@@ -980,7 +999,14 @@ const formatDate = (dateString) => {
               type="password" 
               placeholder="Admin Password"
               required
-              class="w-full bg-white/5 border border-white/10 text-white p-4 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+              class="w-full bg-white/5 border border-white/10 text-white p-4 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all mb-4"
+            />
+            <input 
+              v-model="adminPinInput" 
+              type="password" 
+              placeholder="Security Master PIN"
+              required
+              class="w-full bg-white/5 border border-primary/40 text-primary font-mono tracking-widest p-4 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
             />
           </div>
           <p v-if="loginError" class="text-red-400 text-sm text-center font-semibold">{{ loginError }}</p>
@@ -996,8 +1022,8 @@ const formatDate = (dateString) => {
     </div>
   </div>
 
-  <!-- Admin Dashboard Layout -->
-  <div v-else class="flex h-screen overflow-hidden text-gray-200">
+  <!-- Admin Dashboard Layout (Strictly requires both isAdmin and isServerVerified) -->
+  <div v-else-if="isAdmin && isServerVerified" class="flex h-screen overflow-hidden text-gray-200">
     <!-- Sidebar -->
     <aside class="w-64 flex-shrink-0 border-r border-white/5 bg-[#12121a]/95 backdrop-blur-xl flex flex-col relative z-20">
       <div class="p-6 border-b border-white/5">

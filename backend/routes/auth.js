@@ -82,6 +82,44 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// @route POST /api/auth/admin-login (Requires Email + Password + Secret Master PIN)
+router.post('/admin-login', async (req, res) => {
+    try {
+        const { email, password, adminPin } = req.body;
+        const expectedPin = (process.env.ADMIN_SECRET_PIN).trim();
+
+        if (!adminPin || adminPin.trim() !== expectedPin) {
+            return res.status(403).json({ message: 'Access Denied: Invalid Security Master PIN.' });
+        }
+
+        const user = await User.findOne({ email });
+        if (!user || user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access Denied: Unauthorized admin credentials.' });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Invalid email or password' });
+        }
+
+        const token = jwt.sign({ id: user._id, role: 'admin' }, JWT_SECRET, { expiresIn: '12h' });
+
+        res.json({
+            token,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                profileImage: user.profileImage,
+                role: 'admin'
+            }
+        });
+    } catch (error) {
+        console.error("Admin Login Error", error);
+        res.status(500).json({ message: 'Server error during admin authentication' });
+    }
+});
+
 // @route GET /api/auth/me
 // Verify token and get user info
 router.get('/me', async (req, res) => {
