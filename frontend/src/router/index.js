@@ -35,7 +35,7 @@ const routes = [
     component: () => import('../views/Profile.vue')
   },
   {
-    path: '/admin',
+    path: '/portal-pheak-admin-top-up',
     name: 'Admin',
     component: () => import('../views/Admin.vue')
   },

@@ -7,7 +7,7 @@ import Footer from './components/Footer.vue'
 const route = useRoute()
 
 const showLayout = computed(() => {
-  return !['/login', '/signup'].includes(route.path) && !route.path.startsWith('/admin')
+  return !['/login', '/signup'].includes(route.path) && !route.path.startsWith('/portal-pheak-admin-top-up')
 })
 </script>
 
