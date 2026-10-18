@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const Game = require('../models/Game');
+const { requireAdmin } = require('../middleware/auth');
 
 const PROXY_URL = process.env.DIGIFLAZZ_PROXY || 'http://zjvnatap:ioo73nj265iy@45.38.107.97:6014';
 const httpsAgent = new HttpsProxyAgent(PROXY_URL);
@@ -228,8 +229,8 @@ router.get('/brands', async (req, res) => {
     }
 });
 
-// Get available Games for Admin Import
-router.get('/games', async (req, res) => {
+// Get available Games for Admin Import (Admin only)
+router.get('/games', requireAdmin, async (req, res) => {
     try {
         const products = await getProducts();
         const gameProducts = (products || []).filter(p => p.category && p.category.toLowerCase() === 'games');
@@ -291,8 +292,8 @@ const createDigiflazzTransaction = async ({ buyerSkuCode, customerNo, refId }) =
     return response.data?.data;
 };
 
-// POST /api/digiflazz/topup
-router.post('/topup', async (req, res) => {
+// POST /api/digiflazz/topup (Admin only)
+router.post('/topup', requireAdmin, async (req, res) => {
     try {
         const { buyerSkuCode, customerNo, refId } = req.body;
         if (!buyerSkuCode || !customerNo) {

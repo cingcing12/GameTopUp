@@ -1,19 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/auth');
 
-// Middleware to ensure user is admin
-const requireAdmin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
-    next();
-  } else {
-    res.status(403).json({ message: 'Access denied. Admins only.' });
-  }
-};
-
-// Apply auth and admin middleware to all routes in this file
-router.use(requireAuth, requireAdmin);
+// Apply admin middleware to all routes in this file
+router.use(requireAdmin);
 
 // GET all users
 router.get('/', async (req, res) => {

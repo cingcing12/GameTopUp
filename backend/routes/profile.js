@@ -7,7 +7,6 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 require('dotenv').config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey123';
 
 // Setup Cloudinary (Replace with real keys in .env!)
 // CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
@@ -27,23 +26,11 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage: storage });
 
-// Middleware to verify token
-const authMiddleware = (req, res, next) => {
-    const token = req.header('Authorization')?.split(' ')[1];
-    if (!token) return res.status(401).json({ message: 'No token, authorization denied' });
-
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        req.user = decoded;
-        next();
-    } catch (err) {
-        res.status(401).json({ message: 'Token is not valid' });
-    }
-};
+const { requireAuth } = require('../middleware/auth');
 
 // @route PUT /api/profile
 // Update profile info (username, email)
-router.put('/', authMiddleware, async (req, res) => {
+router.put('/', requireAuth, async (req, res) => {
     try {
         const { username, email } = req.body;
         const user = await User.findById(req.user.id);
@@ -70,7 +57,7 @@ router.put('/', authMiddleware, async (req, res) => {
 
 // @route POST /api/profile/upload
 // Upload profile image to Cloudinary
-router.post('/upload', authMiddleware, upload.single('profileImage'), async (req, res) => {
+router.post('/upload', requireAuth, upload.single('profileImage'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ message: 'No image uploaded' });

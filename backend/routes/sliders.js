@@ -5,6 +5,7 @@ const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 const { sendEvent } = require('../sse');
+const { requireAdmin } = require('../middleware/auth');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -22,7 +23,7 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage: storage });
 
-// Get all sliders
+// Get all sliders (public)
 router.get('/', async (req, res) => {
   try {
     const sliders = await Slider.find().sort({ order: 1 });
@@ -32,8 +33,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Create a new slider
-router.post('/', upload.single('image'), async (req, res) => {
+// Create a new slider (Admin only)
+router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
   try {
     const newSlider = new Slider({
       title: req.body.title,
@@ -52,8 +53,8 @@ router.post('/', upload.single('image'), async (req, res) => {
   }
 });
 
-// Update a slider
-router.put('/:id', upload.single('image'), async (req, res) => {
+// Update a slider (Admin only)
+router.put('/:id', requireAdmin, upload.single('image'), async (req, res) => {
   try {
     const updateData = { ...req.body };
     if (updateData.isActive !== undefined) {
@@ -71,8 +72,8 @@ router.put('/:id', upload.single('image'), async (req, res) => {
   }
 });
 
-// Delete a slider
-router.delete('/:id', async (req, res) => {
+// Delete a slider (Admin only)
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     await Slider.findByIdAndDelete(req.params.id);
     sendEvent('slider_updated', { type: 'deleted', id: req.params.id });

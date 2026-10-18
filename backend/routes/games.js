@@ -5,6 +5,7 @@ const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 const { sendEvent } = require('../sse');
+const { requireAdmin } = require('../middleware/auth');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -42,8 +43,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create a new game
-router.post('/', async (req, res) => {
+// Create a new game (Admin only)
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const newGame = new Game(req.body);
     const savedGame = await newGame.save();
@@ -54,8 +55,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Seed some initial games if empty (for testing)
-router.post('/seed', async (req, res) => {
+// Seed some initial games if empty (Admin only)
+router.post('/seed', requireAdmin, async (req, res) => {
   try {
     const count = await Game.countDocuments();
     if (count > 0) return res.json({ message: 'Games already exist' });
@@ -90,8 +91,8 @@ router.post('/seed', async (req, res) => {
   }
 });
 
-// Update a game (and optionally upload new image/banner)
-router.put('/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'banner', maxCount: 1 }]), async (req, res) => {
+// Update a game (Admin only, optionally upload new image/banner)
+router.put('/:id', requireAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'banner', maxCount: 1 }]), async (req, res) => {
   try {
     const { id } = req.params;
     let updateData = { ...req.body };
@@ -125,8 +126,8 @@ router.put('/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'banne
   }
 });
 
-// Delete a game
-router.delete('/:id', async (req, res) => {
+// Delete a game (Admin only)
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await Game.findByIdAndDelete(id);
@@ -137,8 +138,8 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Update custom prices
-router.put('/:id/prices', async (req, res) => {
+// Update custom prices (Admin only)
+router.put('/:id/prices', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { customPrices } = req.body;
@@ -155,8 +156,9 @@ router.put('/:id/prices', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
-// Upload custom image for a specific package
-router.post('/:id/packages/:variationId/image', upload.single('image'), async (req, res) => {
+
+// Upload custom image for a specific package (Admin only)
+router.post('/:id/packages/:variationId/image', requireAdmin, upload.single('image'), async (req, res) => {
   try {
     const { id, variationId } = req.params;
     

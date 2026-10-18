@@ -11,11 +11,70 @@ import {
 const router = useRouter()
 
 // Authentication State
-const isAdmin = ref(localStorage.getItem('isAdmin') === 'true')
+const isAdmin = ref(false)
+const isVerifyingAuth = ref(true)
 const emailInput = ref('')
 const passwordInput = ref('')
 const loginError = ref('')
 const isLoggingIn = ref(false)
+
+// Authenticated fetch wrapper that sends token and handles token expiry/unauthorized
+const authFetch = async (url, options = {}) => {
+  const token = localStorage.getItem('adminToken')
+  const headers = {
+    ...(options.headers || {})
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  try {
+    const res = await fetch(url, { ...options, headers })
+    if (res.status === 401 || res.status === 403) {
+      isAdmin.value = false
+      localStorage.removeItem('isAdmin')
+      localStorage.removeItem('adminToken')
+      showToast('Admin session expired or access denied. Please log in again.', 'error')
+    }
+    return res
+  } catch (err) {
+    throw err
+  }
+}
+
+// Strictly verify the token with the server on page load
+const checkAdminAuth = async () => {
+  const token = localStorage.getItem('adminToken')
+  if (!token) {
+    isAdmin.value = false
+    localStorage.removeItem('isAdmin')
+    isVerifyingAuth.value = false
+    return false
+  }
+
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await fetch(`${apiUrl}/api/auth/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    const data = await res.json()
+    if (res.ok && data.user && data.user.role === 'admin') {
+      isAdmin.value = true
+      localStorage.setItem('isAdmin', 'true')
+      isVerifyingAuth.value = false
+      return true
+    } else {
+      logoutAdmin()
+      isVerifyingAuth.value = false
+      return false
+    }
+  } catch (e) {
+    logoutAdmin()
+    isVerifyingAuth.value = false
+    return false
+  }
+}
+
 // Confirm Dialog State
 const confirmDialog = ref({
   isOpen: false,
@@ -125,7 +184,7 @@ const openDigiflazzModal = async () => {
     isFetchingDigiflazz.value = true
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-      const res = await fetch(`${apiUrl}/api/digiflazz/games`)
+      const res = await authFetch(`${apiUrl}/api/digiflazz/games`)
       const data = await res.json()
       if (res.ok && data.games) {
         digiflazzGames.value = data.games
@@ -141,11 +200,10 @@ const openDigiflazzModal = async () => {
 const importDigiflazzGame = async (dfGame) => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/games`, {
+    const res = await authFetch(`${apiUrl}/api/games`, {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         name: dfGame.name,
@@ -180,9 +238,7 @@ const fetchUsers = async () => {
   isFetchingUsers.value = true
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/users`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
-    })
+    const res = await authFetch(`${apiUrl}/api/users`)
     if (res.ok) {
       users.value = await res.json()
     }
@@ -203,9 +259,8 @@ const toggleBlockUser = (user) => {
     async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-        const res = await fetch(`${apiUrl}/api/users/${user._id}/block`, {
-          method: 'PUT',
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        const res = await authFetch(`${apiUrl}/api/users/${user._id}/block`, {
+          method: 'PUT'
         })
         const data = await res.json()
         if (res.ok) {
@@ -230,9 +285,8 @@ const deleteUser = (user) => {
     async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-        const res = await fetch(`${apiUrl}/api/users/${user._id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        const res = await authFetch(`${apiUrl}/api/users/${user._id}`, {
+          method: 'DELETE'
         })
         if (res.ok) {
           users.value = users.value.filter(u => u._id !== user._id)
@@ -251,9 +305,7 @@ const deleteUser = (user) => {
 const viewUserTransactions = async (userId) => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/transactions?userId=${userId}`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
-    })
+    const res = await authFetch(`${apiUrl}/api/transactions?userId=${userId}`)
     if (res.ok) {
       selectedUserTransactions.value = await res.json()
     }
@@ -283,11 +335,10 @@ const saveUser = async () => {
   isSavingUser.value = true
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/users/${editingUser.value._id}`, {
+    const res = await authFetch(`${apiUrl}/api/users/${editingUser.value._id}`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(userForm.value)
     })
@@ -339,9 +390,7 @@ const pageForm = ref({ slug: '', title: '', content: '' })
 const fetchPages = async () => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/pages`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
-    })
+    const res = await authFetch(`${apiUrl}/api/pages`)
     if (res.ok) {
       pages.value = await res.json()
     }
@@ -364,11 +413,10 @@ const savePage = async () => {
   isSavingPage.value = true
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/pages/${pageForm.value.slug}`, {
+    const res = await authFetch(`${apiUrl}/api/pages/${pageForm.value.slug}`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(pageForm.value)
     })
@@ -460,9 +508,9 @@ const savePrices = async () => {
     })
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/games/${selectedGameForPricing.value._id}/prices`, {
+    const res = await authFetch(`${apiUrl}/api/games/${selectedGameForPricing.value._id}/prices`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customPrices })
     })
     
@@ -489,9 +537,8 @@ const deleteGame = (game) => {
     async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-        const res = await fetch(`${apiUrl}/api/games/${game._id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        const res = await authFetch(`${apiUrl}/api/games/${game._id}`, {
+          method: 'DELETE'
         })
         
         if (res.ok) {
@@ -520,13 +567,11 @@ const fetchTransactions = async () => {
   isLoading.value = true
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/transactions`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
-    })
+    const res = await authFetch(`${apiUrl}/api/transactions`)
     const data = await res.json()
     if (res.ok) {
       transactions.value = data
-    } else if (res.status === 401) {
+    } else if (res.status === 401 || res.status === 403) {
       isAdmin.value = false
       localStorage.removeItem('isAdmin')
       localStorage.removeItem('adminToken')
@@ -562,7 +607,7 @@ const saveGameApi = async (game) => {
     if (game.currencyImage !== undefined) formData.append('currencyImage', game.currencyImage)
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/games/${game._id}`, {
+    const res = await authFetch(`${apiUrl}/api/games/${game._id}`, {
       method: 'PUT',
       body: formData
     })
@@ -588,7 +633,7 @@ const toggleGameStatus = async (game) => {
     formData.append('isActive', newStatus)
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/games/${game._id}`, {
+    const res = await authFetch(`${apiUrl}/api/games/${game._id}`, {
       method: 'PUT',
       body: formData
     })
@@ -618,7 +663,7 @@ const handleImageUpload = async (event, game, type = 'image') => {
     formData.append(type, file)
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/games/${game._id}`, {
+    const res = await authFetch(`${apiUrl}/api/games/${game._id}`, {
       method: 'PUT',
       body: formData
     })
@@ -653,7 +698,7 @@ const handlePackageImageUpload = async (event, pkg) => {
     formData.append('image', file)
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/games/${selectedGameForPricing.value._id}/packages/${pkg.id}/image`, {
+    const res = await authFetch(`${apiUrl}/api/games/${selectedGameForPricing.value._id}/packages/${pkg.id}/image`, {
       method: 'POST',
       body: formData
     })
@@ -690,7 +735,7 @@ const handleSliderUpload = async (event, slider) => {
     formData.append('image', file)
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/sliders/${slider._id}`, {
+    const res = await authFetch(`${apiUrl}/api/sliders/${slider._id}`, {
       method: 'PUT',
       body: formData
     })
@@ -754,7 +799,7 @@ const saveSlider = async () => {
       : `${apiUrl}/api/sliders`
     const method = editingSlider.value ? 'PUT' : 'POST'
 
-    const res = await fetch(url, { method, body: formData })
+    const res = await authFetch(url, { method, body: formData })
     const data = await res.json()
 
     if (res.ok) {
@@ -785,7 +830,7 @@ const deleteSlider = (slider) => {
     async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-        const res = await fetch(`${apiUrl}/api/sliders/${slider._id}`, { method: 'DELETE' })
+        const res = await authFetch(`${apiUrl}/api/sliders/${slider._id}`, { method: 'DELETE' })
         if (res.ok) {
           sliders.value = sliders.value.filter(s => s._id !== slider._id)
           showToast('Slider deleted successfully!', 'success')
@@ -806,7 +851,7 @@ const toggleSliderStatus = async (slider) => {
     const formData = new FormData()
     formData.append('isActive', newStatus)
     
-    const res = await fetch(`${apiUrl}/api/sliders/${slider._id}`, {
+    const res = await authFetch(`${apiUrl}/api/sliders/${slider._id}`, {
       method: 'PUT',
       body: formData
     })
@@ -822,8 +867,9 @@ const toggleSliderStatus = async (slider) => {
   }
 }
 
-onMounted(() => {
-  if (isAdmin.value) {
+onMounted(async () => {
+  const isAuth = await checkAdminAuth()
+  if (isAuth) {
     fetchTransactions()
     fetchUsers()
     fetchPages()
@@ -899,8 +945,16 @@ const formatDate = (dateString) => {
 </script>
 
 <template>
+  <!-- Verifying Auth Screen -->
+  <div v-if="isVerifyingAuth" class="min-h-screen flex items-center justify-center p-4 bg-[#0d0f12]">
+    <div class="flex flex-col items-center gap-3">
+      <RefreshCw class="w-8 h-8 text-primary animate-spin" />
+      <p class="text-sm text-gray-400 font-medium">Verifying secure authorization...</p>
+    </div>
+  </div>
+
   <!-- Admin Login Screen -->
-  <div v-if="!isAdmin" class="min-h-screen flex items-center justify-center p-4">
+  <div v-else-if="!isAdmin" class="min-h-screen flex items-center justify-center p-4">
     <div class="glass-card max-w-md w-full p-8 rounded-3xl border border-white/10 shadow-2xl relative overflow-hidden">
       <div class="absolute -top-20 -right-20 w-40 h-40 bg-primary/20 blur-3xl rounded-full"></div>
       <div class="absolute -bottom-20 -left-20 w-40 h-40 bg-red-500/20 blur-3xl rounded-full"></div>

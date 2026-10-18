@@ -1,14 +1,11 @@
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey123';
+const JWT_SECRET = process.env.JWT_SECRET || 'gtu_sec_9f7a83d1c4e2056b82419ef012ab684c90e72bf851a';
 
 const authMiddleware = (req, res, next) => {
-    // Optional check: if route wants to allow guest, use a different middleware or pass a flag
-    // but here we just require it. Or we can just try to extract it and attach to req.user.
     const token = req.header('Authorization')?.split(' ')[1];
     
-    // For optional auth (where guests are allowed but we want to identify logged in users)
     if (!token) {
         req.user = null;
         return next();
@@ -37,4 +34,13 @@ const requireAuth = (req, res, next) => {
     }
 };
 
-module.exports = { authMiddleware, requireAuth };
+const requireAdmin = (req, res, next) => {
+    requireAuth(req, res, () => {
+        if (req.user && req.user.role === 'admin') {
+            return next();
+        }
+        return res.status(403).json({ message: 'Access denied. Admins only.' });
+    });
+};
+
+module.exports = { authMiddleware, requireAuth, requireAdmin, JWT_SECRET };
