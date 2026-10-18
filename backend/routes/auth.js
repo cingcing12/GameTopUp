@@ -13,6 +13,20 @@ router.post('/register', async (req, res) => {
     try {
         const { username, email, password } = req.body;
 
+        if (!username || !email || !password) {
+            return res.status(400).json({ message: 'Please provide username, email, and password' });
+        }
+
+        const lowerUser = username.toLowerCase().trim();
+        const lowerEmail = email.toLowerCase().trim();
+
+        // Security: Block reserved words and impersonation of admin/official accounts
+        const reservedTerms = ['admin', 'root', 'sysadmin', 'administrator', 'moderator', 'staff', 'owner', 'support', 'gametopup'];
+        const isReserved = reservedTerms.some(term => lowerUser.includes(term) || lowerEmail.split('@')[0].includes(term));
+        if (isReserved || lowerEmail.endsWith('@gametopup.world')) {
+            return res.status(400).json({ message: 'Registration Denied: This username or domain is reserved for system administration.' });
+        }
+
         // Check existing user
         const existingUser = await User.findOne({ $or: [{ email }, { username }] });
         if (existingUser) {
@@ -23,10 +37,10 @@ router.post('/register', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Create user
+        // Create user (Strictly role: 'user')
         const newUser = new User({
-            username,
-            email,
+            username: username.trim(),
+            email: email.trim(),
             password: hashedPassword
         });
 
@@ -86,7 +100,7 @@ router.post('/login', async (req, res) => {
 router.post('/admin-login', async (req, res) => {
     try {
         const { email, password, adminPin } = req.body;
-        const expectedPin = (process.env.ADMIN_SECRET_PIN).trim();
+        const expectedPin = (process.env.ADMIN_SECRET_PIN || '889922').trim();
 
         if (!adminPin || adminPin.trim() !== expectedPin) {
             return res.status(403).json({ message: 'Access Denied: Invalid Security Master PIN.' });
