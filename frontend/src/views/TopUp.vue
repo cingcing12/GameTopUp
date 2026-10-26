@@ -38,14 +38,25 @@ const needsZoneId = computed(() => {
 // No mock fallback packages used
 
 const loadGamePackages = async (dbGame) => {
-  const brand = dbGame.digiflazzBrand || 'MOBILE LEGENDS';
-  const typeParam = dbGame.digiflazzType ? `&type=${encodeURIComponent(dbGame.digiflazzType)}` : '';
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  const res = await fetch(`${apiUrl}/api/digiflazz/products?brand=${encodeURIComponent(brand)}${typeParam}`);
+  const isVip = dbGame.provider === 'vipreseller' || (!dbGame.provider && !dbGame.digiflazzBrand);
+
+  let res;
+  if (isVip) {
+    const gameQuery = dbGame.vipResellerGame || dbGame.name || 'Mobile Legends B';
+    res = await fetch(`${apiUrl}/api/vipreseller/products?game=${encodeURIComponent(gameQuery)}`);
+  } else {
+    const brand = dbGame.digiflazzBrand || 'MOBILE LEGENDS';
+    const typeParam = dbGame.digiflazzType ? `&type=${encodeURIComponent(dbGame.digiflazzType)}` : '';
+    res = await fetch(`${apiUrl}/api/digiflazz/products?brand=${encodeURIComponent(brand)}${typeParam}`);
+  }
   const data = await res.json();
   
   if (res.ok && data?.data) {
-    packages.value = data.data.map(item => {
+    const activeList = data.data.filter(item => item.status === 'Active' || item.buyer_product_status);
+    const sortedList = (activeList.length > 0 ? activeList : data.data).sort((a, b) => (a.price_usd || 0) - (b.price_usd || 0));
+    
+    packages.value = sortedList.map(item => {
       const rawName = item.product_name || '';
       const match = rawName.match(/\d+/);
       const parsedAmount = match ? parseInt(match[0]) : 1;
@@ -87,8 +98,11 @@ onMounted(async () => {
       gameInfo.value.banner = dbGame.banner || gameInfo.value.banner;
       gameInfo.value.currencyImage = dbGame.currencyImage || '💎';
       gameInfo.value.customImages = dbGame.customImages || {};
+      gameInfo.value.provider = dbGame.provider || 'vipreseller';
+      gameInfo.value.vipResellerGame = dbGame.vipResellerGame;
+      gameInfo.value.digiflazzBrand = dbGame.digiflazzBrand;
       
-      // Load Digiflazz packages
+      // Load packages
       await loadGamePackages(dbGame);
     } else {
       packages.value = []
@@ -188,7 +202,10 @@ const checkPlayerId = async () => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
-    const validateRes = await fetch(`${apiUrl}/api/digiflazz/validate`, {
+    const isVip = gameInfo.value?.provider === 'vipreseller' || (!gameInfo.value?.provider && !gameInfo.value?.digiflazzBrand);
+    const validateEndpoint = isVip ? `${apiUrl}/api/vipreseller/validate` : `${apiUrl}/api/digiflazz/validate`;
+
+    const validateRes = await fetch(validateEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -255,17 +272,27 @@ const handleCheckout = async () => {
       }
     }
 
-    // 2. Strict Provider Balance Check: Ensure Digiflazz has enough funds before generating payment QR
-    const balanceRes = await fetch(`${apiUrl}/api/digiflazz/balance`)
-    const balanceData = await balanceRes.json()
-    const currentBalance = parseFloat(balanceData.balance_usd || balanceData.balance || 0)
+    // 2. Strict Provider Wallet Balance Check: Ensure provider has enough funds before generating payment QR
+    const isVip = gameInfo.value?.provider === 'vipreseller' || (!gameInfo.value?.provider && !gameInfo.value?.digiflazzBrand);
+    const balanceEndpoint = isVip ? `${apiUrl}/api/vipreseller/balance` : `${apiUrl}/api/digiflazz/balance`;
+    
+    try {
+      const balanceRes = await fetch(balanceEndpoint);
+      const balanceData = await balanceRes.json();
 
-    if (currentBalance <= 0 || currentBalance < selectedPackage.value.price) {
-      if (currentBalance <= 0) {
-        throw new Error('Top-up service is temporarily out of stock (Insufficient provider balance). Please try again later.')
-      } else {
-        throw new Error(`Insufficient provider balance ($${currentBalance.toFixed(2)} available, package costs $${selectedPackage.value.price.toFixed(2)}). Please try again later.`)
+      const balanceIdr = balanceData.deposit !== undefined ? balanceData.deposit : (balanceData.balance_idr || 0);
+      const currentBalance = parseFloat(balanceData.balance_usd || balanceData.balance || 0);
+      const requiredPrice = parseFloat(selectedPackage.value.price || 0);
+
+      // If balance is 0 or less than package price, block checkout gracefully
+      if (currentBalance <= 0 || balanceIdr <= 0 || currentBalance < requiredPrice) {
+        throw new Error('This item is temporarily out of stock. Please try again later.');
       }
+    } catch (balanceErr) {
+      if (balanceErr.message && balanceErr.message.includes('out of stock')) {
+        throw balanceErr;
+      }
+      throw new Error('Service is temporarily undergoing maintenance. Please try again later.');
     }
 
     // 2. Generate KHQR code: use lorndavid.online directly from browser for unlimited generation

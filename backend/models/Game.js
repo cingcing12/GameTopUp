@@ -6,7 +6,8 @@ const gameSchema = new mongoose.Schema({
   image: { type: String, required: true },
   banner: { type: String },
   currencyImage: { type: String, default: '💎' },
-  provider: { type: String, enum: ['digiflazz', 'manual'], default: 'digiflazz' },
+  provider: { type: String, enum: ['vipreseller', 'digiflazz', 'manual'], default: 'vipreseller' },
+  vipResellerGame: { type: String },
   digiflazzBrand: { type: String },
   digiflazzType: { type: String, default: 'GLOBAL' },
   denominations: [{

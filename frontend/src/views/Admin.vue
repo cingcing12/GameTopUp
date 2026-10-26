@@ -5,7 +5,8 @@ import {
   CheckCircle2, XCircle, Clock, Search, RefreshCw, 
   Activity, DollarSign, Users, Package, LayoutDashboard, 
   Settings, LogOut, ShieldAlert, ChevronRight, Gamepad2, UploadCloud, Image as ImageIcon,
-  AlertCircle, LayoutTemplate, Plus, Edit, Trash2, Eye, EyeOff, Lock, Unlock, ListOrdered, FileText
+  AlertCircle, LayoutTemplate, Plus, Edit, Trash2, Eye, EyeOff, Lock, Unlock, ListOrdered, FileText,
+  Wallet
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -181,6 +182,95 @@ const filteredGamesList = computed(() => {
     (g.publisher && g.publisher.toLowerCase().includes(q))
   )
 })
+
+// VIP Reseller Import State
+const showVipModal = ref(false)
+const vipGames = ref([])
+const searchVipQuery = ref('')
+const isFetchingVip = ref(false)
+
+const filteredVipGames = computed(() => {
+  if (!searchVipQuery.value) return vipGames.value
+  const q = searchVipQuery.value.toLowerCase()
+  return vipGames.value.filter(g => 
+    (g.name && g.name.toLowerCase().includes(q)) || 
+    (g.game && g.game.toLowerCase().includes(q))
+  )
+})
+
+const openVipModal = async () => {
+  showVipModal.value = true
+  if (vipGames.value.length === 0) {
+    isFetchingVip.value = true
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+      const res = await authFetch(`${apiUrl}/api/vipreseller/games`)
+      const data = await res.json()
+      if (res.ok && data.games) {
+        vipGames.value = data.games
+      }
+    } catch (error) {
+      showToast('Failed to fetch VIP Reseller games', 'error')
+    } finally {
+      isFetchingVip.value = false
+    }
+  }
+}
+
+const importVipGame = async (vGame) => {
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await authFetch(`${apiUrl}/api/games`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: vGame.name,
+        publisher: 'VIP Reseller',
+        provider: 'vipreseller',
+        vipResellerGame: vGame.game,
+        image: vGame.sampleImage || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
+        rapidApiId: vGame.rapidApiId || 'mobile-legends',
+        isActive: true
+      })
+    })
+    
+    if (res.ok) {
+      const newGame = await res.json()
+      games.value.push(newGame)
+      showToast(`${vGame.name} imported from VIP Reseller!`, 'success')
+      showVipModal.value = false
+    } else {
+      showToast('Failed to import game', 'error')
+    }
+  } catch (error) {
+    showToast('Error importing game', 'error')
+  }
+}
+
+// VIP Reseller Live Wallet State
+const vipWalletBalance = ref(0)
+const vipWalletIdr = ref(0)
+const vipAccountUsername = ref('')
+const isFetchingVipBalance = ref(false)
+
+const fetchVipBalance = async () => {
+  isFetchingVipBalance.value = true
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await rawFetch(`${apiUrl}/api/vipreseller/balance`)
+    const data = await res.json()
+    if (res.ok && data.success) {
+      vipWalletBalance.value = data.balance_usd || 0
+      vipWalletIdr.value = data.deposit || data.balance_idr || 0
+      vipAccountUsername.value = data.username || data.full_name || ''
+    }
+  } catch (e) {
+  } finally {
+    isFetchingVipBalance.value = false
+  }
+}
 
 // Digiflazz Import State
 const showDigiflazzModal = ref(false)
@@ -487,17 +577,28 @@ const openPricingModal = async (game) => {
   
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const isVip = game.provider === 'vipreseller' || (!game.provider && !game.digiflazzBrand)
     
-    const brand = game.digiflazzBrand || 'MOBILE LEGENDS';
-    const typeParam = game.digiflazzType ? `&type=${encodeURIComponent(game.digiflazzType)}` : '';
-    const res = await fetch(`${apiUrl}/api/digiflazz/products?brand=${encodeURIComponent(brand)}${typeParam}`);
+    let url = ''
+    if (isVip) {
+      url = `${apiUrl}/api/vipreseller/products?game=${encodeURIComponent(game.vipResellerGame || game.name)}`
+    } else {
+      const brand = game.digiflazzBrand || 'MOBILE LEGENDS';
+      const typeParam = game.digiflazzType ? `&type=${encodeURIComponent(game.digiflazzType)}` : '';
+      url = `${apiUrl}/api/digiflazz/products?brand=${encodeURIComponent(brand)}${typeParam}`;
+    }
+
+    const res = await fetch(url);
     const data = await res.json();
     
     if (res.ok && data?.data) {
       if (data.exchange_rate?.rate) {
         liveExchangeRate.value = data.exchange_rate.rate;
       }
-      gamePackages.value = data.data.map(p => {
+      const activeList = data.data.filter(p => p.status === 'Active' || p.buyer_product_status);
+      const sortedList = (activeList.length > 0 ? activeList : data.data).sort((a, b) => (a.price_usd || 0) - (b.price_usd || 0));
+
+      gamePackages.value = sortedList.map(p => {
         const customP = game.customPrices && game.customPrices[p.buyer_sku_code];
         return {
           id: p.buyer_sku_code,
@@ -892,6 +993,7 @@ onMounted(async () => {
     fetchTransactions()
     fetchUsers()
     fetchPages()
+    fetchVipBalance()
   }
 })
 
@@ -1109,7 +1211,7 @@ const formatDate = (dateString) => {
             <p class="text-gray-400 font-medium">Monitor real-time top-ups and revenue.</p>
           </div>
           
-          <button @click="fetchTransactions" class="bg-white/5 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl border border-white/10 font-semibold transition-all flex items-center gap-2 group">
+          <button @click="fetchTransactions(); fetchVipBalance()" class="bg-white/5 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl border border-white/10 font-semibold transition-all flex items-center gap-2 group">
             <RefreshCw class="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
             Refresh Data
           </button>
@@ -1118,7 +1220,7 @@ const formatDate = (dateString) => {
         <!-- Dashboard Overview Section -->
         <div v-if="activeTab === 'dashboard'" class="animate-fade-in">
           <!-- Stats Row -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           <div class="glass-card p-6 border border-white/10 bg-white/[0.02] backdrop-blur-md rounded-2xl relative overflow-hidden group hover:border-primary/50 transition-all duration-300">
             <div class="absolute -right-4 -bottom-4 p-4 opacity-10 text-primary group-hover:scale-110 transition-transform"><DollarSign class="w-24 h-24" /></div>
             <h3 class="text-gray-400 font-semibold text-xs mb-1 uppercase tracking-wider">Total Revenue</h3>
@@ -1137,6 +1239,18 @@ const formatDate = (dateString) => {
             <p class="text-4xl font-black text-white font-outfit">
               {{ totalOrders > 0 ? Math.round((successfulOrders / totalOrders) * 100) : 0 }}%
             </p>
+          </div>
+
+          <div class="glass-card p-6 border border-purple-500/30 bg-purple-500/[0.03] backdrop-blur-md rounded-2xl relative overflow-hidden group hover:border-purple-500/60 transition-all duration-300">
+            <div class="absolute -right-4 -bottom-4 p-4 opacity-10 text-purple-400 group-hover:scale-110 transition-transform"><Wallet class="w-24 h-24" /></div>
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="text-gray-400 font-semibold text-xs uppercase tracking-wider">VIP Reseller Wallet</h3>
+              <span :class="vipWalletIdr > 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border">
+                {{ vipWalletIdr > 0 ? 'Funded' : 'Empty' }}
+              </span>
+            </div>
+            <p class="text-2xl font-black text-white font-outfit">Rp {{ Number(vipWalletIdr).toLocaleString() }}</p>
+            <p class="text-xs text-purple-300 font-mono mt-1">≈ ${{ Number(vipWalletBalance).toFixed(2) }} USD • {{ vipAccountUsername || 'Pheak1234' }}</p>
           </div>
         </div>
 
@@ -1269,8 +1383,11 @@ const formatDate = (dateString) => {
                   />
                 </div>
                 
-                <button @click="openDigiflazzModal" class="bg-primary hover:bg-primary/90 text-darker font-bold py-2 px-4 rounded-xl transition-all whitespace-nowrap flex items-center gap-2 shadow-lg shadow-primary/20">
-                  <Plus class="w-4 h-4" /> Import from Digiflazz
+                <button @click="openVipModal" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl transition-all whitespace-nowrap flex items-center gap-2 shadow-lg shadow-purple-600/20">
+                  <Plus class="w-4 h-4" /> Import from VIP Reseller
+                </button>
+                <button @click="openDigiflazzModal" class="bg-white/10 hover:bg-white/15 text-gray-300 hover:text-white border border-white/10 font-bold py-2 px-3 rounded-xl transition-all whitespace-nowrap flex items-center gap-2 text-xs">
+                  <Plus class="w-3.5 h-3.5" /> Digiflazz
                 </button>
               </div>
             </div>
@@ -1309,7 +1426,12 @@ const formatDate = (dateString) => {
                   </div>
                 </div>
                 
-                <h3 class="text-lg font-bold text-white font-outfit">{{ game.name }}</h3>
+                <div class="flex items-center justify-between gap-2 mb-1">
+                  <h3 class="text-lg font-bold text-white font-outfit truncate">{{ game.name }}</h3>
+                  <span :class="game.provider === 'vipreseller' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/30'" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shrink-0">
+                    {{ game.provider === 'vipreseller' ? 'VIP Reseller' : 'Digiflazz' }}
+                  </span>
+                </div>
                 <input 
                   v-model="game.publisher"
                   @change="saveGameApi(game)"
@@ -1562,7 +1684,7 @@ const formatDate = (dateString) => {
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Live Digiflazz Rate</span>
+                <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{{ selectedGameForPricing?.provider === 'vipreseller' ? 'Live VIP Reseller Rate' : 'Live Provider Rate' }}</span>
                 <span class="px-2 py-0.2 rounded-full text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">Live Market</span>
               </div>
               <p class="text-white font-extrabold text-sm sm:text-base">
@@ -1615,9 +1737,9 @@ const formatDate = (dateString) => {
             
             <!-- Right: Cost in IDR, Cost in USD, Sell For, and Profit badge -->
             <div class="flex items-center justify-between md:justify-end gap-4 sm:gap-6 w-full md:w-7/12 flex-wrap sm:flex-nowrap">
-              <!-- Digiflazz Cost (IDR + USD) -->
+              <!-- Provider Cost (IDR + USD) -->
               <div class="flex flex-col text-left md:text-right shrink-0">
-                <span class="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Digiflazz Cost</span>
+                <span class="text-gray-500 text-[10px] uppercase font-bold tracking-wider">{{ selectedGameForPricing?.provider === 'vipreseller' ? 'VIP Cost' : 'Digiflazz Cost' }}</span>
                 <span class="text-gray-200 font-extrabold text-sm">${{ pkg.originalPrice.toFixed(2) }}</span>
                 <span class="text-primary font-mono text-[11px]">Rp {{ Number(pkg.priceIdr || 0).toLocaleString() }}</span>
               </div>
@@ -1873,6 +1995,59 @@ const formatDate = (dateString) => {
         <p class="text-white font-bold text-sm pr-4">{{ toast.message }}</p>
       </div>
     </div>
+    <!-- VIP Reseller Import Modal -->
+    <div v-if="showVipModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showVipModal = false"></div>
+      
+      <div class="relative bg-darker border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
+        <div class="p-6 border-b border-white/10 flex justify-between items-center bg-gradient-to-r from-purple-900/30 to-indigo-900/30">
+          <h3 class="text-xl font-bold text-white flex items-center gap-2">
+            <Plus class="w-5 h-5 text-purple-400" />
+            Import Game from VIP Reseller
+          </h3>
+          <button @click="showVipModal = false" class="text-gray-400 hover:text-white transition-colors">
+            <XCircle class="w-6 h-6" />
+          </button>
+        </div>
+        
+        <div class="p-6 border-b border-white/10">
+          <div class="relative w-full">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input 
+              type="text" 
+              v-model="searchVipQuery" 
+              placeholder="Search VIP Reseller games (e.g. Mobile Legends, Free Fire, PUBG)..." 
+              class="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+            />
+          </div>
+        </div>
+        
+        <div class="p-6 overflow-y-auto flex-1">
+          <div v-if="isFetchingVip" class="flex flex-col items-center justify-center py-12 text-gray-400">
+            <RefreshCw class="w-8 h-8 animate-spin mb-4 text-purple-400" />
+            <p>Fetching active games from VIP Reseller...</p>
+          </div>
+          <div v-else-if="filteredVipGames.length === 0" class="text-center py-8 text-gray-500">
+            No games found.
+          </div>
+          <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div v-for="vGame in filteredVipGames" :key="vGame.game" class="bg-black/40 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:border-purple-500/50 transition-all">
+              <div class="flex items-center gap-3 flex-1 truncate pr-3">
+                <img :src="vGame.sampleImage" class="w-12 h-12 rounded-lg object-cover border border-white/10 shrink-0" />
+                <div class="truncate">
+                  <p class="text-white font-semibold truncate">{{ vGame.name }}</p>
+                  <p class="text-xs text-purple-400 font-medium">{{ vGame.availableCount }} available • {{ vGame.itemsCount }} total</p>
+                </div>
+              </div>
+              <button @click="importVipGame(vGame)" class="bg-purple-600/20 text-purple-400 hover:bg-purple-600 hover:text-white border border-purple-500/50 px-3.5 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap">
+                Import
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Digiflazz Import Modal -->
     <div v-if="showDigiflazzModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showDigiflazzModal = false"></div>
