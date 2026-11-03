@@ -74,6 +74,8 @@ router.post('/', authMiddleware, async (req, res) => {
       price: parsedPrice,
       paymentMethod,
       paymentReference: (isKhqr && md5) ? md5.trim() : undefined,
+      paymentStatus: (isKhqr || isAdmin) ? 'paid' : 'unpaid',
+      deliveryStatus: 'pending',
       status: 'pending'
     });
 
@@ -91,6 +93,8 @@ router.post('/', authMiddleware, async (req, res) => {
       // Keep status as 'processing' (sending) if MooGold hasn't delivered diamonds yet
       const isCompleted = mooRes.order_status === 'completed' || mooRes.status === 'completed';
       savedTransaction.status = isCompleted ? 'completed' : 'processing';
+      savedTransaction.deliveryStatus = isCompleted ? 'delivered' : 'sending';
+      savedTransaction.paymentStatus = 'paid';
       savedTransaction.providerReference = mooRes.ref_id || savedTransaction._id.toString();
       await savedTransaction.save();
 
@@ -103,6 +107,8 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     } catch (providerErr) {
       savedTransaction.status = 'failed';
+      savedTransaction.deliveryStatus = 'failed';
+      savedTransaction.paymentStatus = 'paid'; // User money was paid, but delivery failed!
       savedTransaction.errorDetails = providerErr.response?.data?.err_message || providerErr.response?.data?.message || providerErr.message;
       await savedTransaction.save();
 
@@ -130,16 +136,30 @@ router.get('/:id/status', async (req, res) => {
       const { checkMoogoldOrderStatus } = require('./moogold');
       try {
         const orderInfo = await checkMoogoldOrderStatus(tx.providerReference);
+        let changed = false;
         if (orderInfo.status !== tx.status) {
           tx.status = orderInfo.status;
-          if (orderInfo.status === 'failed') {
-            tx.errorDetails = `MooGold status: ${orderInfo.order_status}`;
-          }
+          changed = true;
+        }
+        if (orderInfo.status === 'completed' && tx.deliveryStatus !== 'delivered') {
+          tx.deliveryStatus = 'delivered';
+          changed = true;
+        } else if (orderInfo.status === 'failed' && tx.deliveryStatus !== 'failed') {
+          tx.deliveryStatus = 'failed';
+          tx.errorDetails = `MooGold: ${orderInfo.order_status}`;
+          changed = true;
+        } else if (orderInfo.status === 'processing' && tx.deliveryStatus !== 'sending') {
+          tx.deliveryStatus = 'sending';
+          changed = true;
+        }
+        if (changed) {
           await tx.save();
         }
         return res.json({
           success: true,
           status: tx.status,
+          paymentStatus: tx.paymentStatus || 'paid',
+          deliveryStatus: tx.deliveryStatus || 'sending',
           order_status: orderInfo.order_status,
           transaction: tx
         });
@@ -148,9 +168,37 @@ router.get('/:id/status', async (req, res) => {
       }
     }
 
-    res.json({ success: true, status: tx.status, transaction: tx });
+    res.json({ 
+      success: true, 
+      status: tx.status, 
+      paymentStatus: tx.paymentStatus || 'paid',
+      deliveryStatus: tx.deliveryStatus || (tx.status === 'completed' ? 'delivered' : tx.status === 'failed' ? 'failed' : 'pending'),
+      transaction: tx 
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update transaction status manually [ADMIN ONLY]
+router.patch('/:id', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    const { paymentStatus, deliveryStatus, status, errorDetails } = req.body;
+    const tx = await Transaction.findById(req.params.id);
+    if (!tx) {
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+    if (paymentStatus) tx.paymentStatus = paymentStatus;
+    if (deliveryStatus) tx.deliveryStatus = deliveryStatus;
+    if (status) tx.status = status;
+    if (errorDetails !== undefined) tx.errorDetails = errorDetails;
+    await tx.save();
+    res.json({ success: true, transaction: tx });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -168,7 +216,20 @@ router.get('/', requireAuth, async (req, res) => {
       .populate('gameId', 'name image publisher')
       .sort({ createdAt: -1 })
       .limit(50);
-    res.json(transactions);
+    
+    // Normalize dual status for legacy records
+    const normalized = transactions.map(t => {
+      const doc = t.toObject ? t.toObject() : { ...t };
+      if (!doc.paymentStatus) {
+        doc.paymentStatus = (doc.status === 'completed' || doc.status === 'processing' || doc.status === 'failed') ? 'paid' : 'unpaid';
+      }
+      if (!doc.deliveryStatus) {
+        doc.deliveryStatus = doc.status === 'completed' ? 'delivered' : doc.status === 'processing' ? 'sending' : doc.status === 'failed' ? 'failed' : 'pending';
+      }
+      return doc;
+    });
+
+    res.json(normalized);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -480,7 +480,8 @@ const confirmPaymentAndTopUp = async () => {
         amount: selectedPackage.value.amount,
         productId: selectedPackage.value.id, 
         price: selectedPackage.value.price,
-        paymentMethod: selectedPayment.value.id
+        paymentMethod: selectedPayment.value.id,
+        md5: khqrData.value?.md5 || ''
       })
     })
     
@@ -750,21 +751,43 @@ const resetCheckout = () => {
               <RefreshCw class="w-10 h-10 animate-spin" />
             </div>
 
-            <!-- Title -->
-            <h3 class="text-2xl font-black text-white mb-2 font-outfit">
-              {{ currentTransaction?.status === 'completed' ? 'Top-Up Completed!' : currentTransaction?.status === 'failed' ? 'Order Failed' : 'Payment Received — Sending Diamonds...' }}
-            </h3>
+            <!-- Title & Status Breakdown -->
+            <div class="mb-4">
+              <div class="flex items-center justify-center gap-2 mb-3">
+                <span class="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  Payment: Paid
+                </span>
+                <span 
+                  class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border flex items-center gap-1.5"
+                  :class="currentTransaction?.deliveryStatus === 'delivered' || currentTransaction?.status === 'completed'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+                    : currentTransaction?.deliveryStatus === 'failed' || currentTransaction?.status === 'failed'
+                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/25'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/25'"
+                >
+                  <span v-if="currentTransaction?.deliveryStatus === 'sending' || currentTransaction?.status === 'processing'" class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+                  <span v-else class="w-1.5 h-1.5 rounded-full" :class="currentTransaction?.deliveryStatus === 'delivered' || currentTransaction?.status === 'completed' ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+                  Delivery: {{ currentTransaction?.deliveryStatus === 'delivered' || currentTransaction?.status === 'completed' ? 'Delivered' : currentTransaction?.deliveryStatus === 'failed' || currentTransaction?.status === 'failed' ? 'Failed' : 'Sending' }}
+                </span>
+              </div>
+
+              <h3 class="text-2xl font-black text-white font-outfit">
+                {{ currentTransaction?.deliveryStatus === 'delivered' || currentTransaction?.status === 'completed' ? 'Diamonds Delivered!' : currentTransaction?.deliveryStatus === 'failed' || currentTransaction?.status === 'failed' ? 'Delivery Issue' : 'Payment Received — Sending Diamonds...' }}
+              </h3>
+            </div>
 
             <!-- Details -->
-            <div v-if="currentTransaction?.status === 'completed'">
-              <p class="text-gray-300 mb-6 font-medium">Diamonds have been delivered successfully to your account!</p>
+            <div v-if="currentTransaction?.deliveryStatus === 'delivered' || currentTransaction?.status === 'completed'">
+              <p class="text-gray-300 mb-6 font-medium">Diamonds have been delivered successfully to your game account!</p>
             </div>
-            <div v-else-if="currentTransaction?.status === 'failed'">
-              <p class="text-red-400 mb-6 font-medium">{{ currentTransaction?.errorDetails || 'Failed to deliver diamonds. Please contact support.' }}</p>
+            <div v-else-if="currentTransaction?.deliveryStatus === 'failed' || currentTransaction?.status === 'failed'">
+              <p class="text-rose-400 mb-2 font-medium">{{ currentTransaction?.errorDetails || 'MooGold was unable to deliver diamonds.' }}</p>
+              <p class="text-xs text-gray-400 mb-6 max-w-md mx-auto">Your payment was confirmed. Please contact support with MooGold Order #{{ currentTransaction?.providerReference || currentTransaction?._id }} for a manual re-delivery or refund.</p>
             </div>
             <div v-else class="space-y-2 mb-6">
               <p class="text-amber-300 font-semibold text-sm">
-                MooGold is currently sending to <span class="text-white font-mono">{{ playerId }} ({{ zoneId }})</span>.
+                MooGold is currently sending diamonds to <span class="text-white font-mono">{{ playerId }} ({{ zoneId }})</span>.
               </p>
               <p class="text-gray-400 text-xs">
                 MooGold Order #{{ currentTransaction?.providerReference || 'Pending' }}. Status updates automatically once delivered by game server.

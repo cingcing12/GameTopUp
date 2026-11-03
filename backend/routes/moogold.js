@@ -562,14 +562,17 @@ router.post('/callback', async (req, res) => {
             if (tx) {
                 if (order_status === 'completed') {
                     tx.status = 'completed';
+                    tx.deliveryStatus = 'delivered';
                 } else if (order_status === 'refunded' || order_status === 'failed' || order_status === 'cancelled' || order_status === 'incorrect-details') {
                     tx.status = 'failed';
+                    tx.deliveryStatus = 'failed';
                     tx.errorDetails = `MooGold callback: ${order_status}`;
                 } else if (order_status === 'sending' || order_status === 'processing') {
                     tx.status = 'processing';
+                    tx.deliveryStatus = 'sending';
                 }
                 await tx.save();
-                console.log(`[MooGold Webhook] Order #${order_id || tx._id} updated to ${tx.status}`);
+                console.log(`[MooGold Webhook] Order #${order_id || tx._id} updated: status=${tx.status}, delivery=${tx.deliveryStatus}`);
             }
         }
 

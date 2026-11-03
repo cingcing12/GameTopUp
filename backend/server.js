@@ -60,14 +60,28 @@ const syncProcessingOrders = async () => {
         for (const tx of activeTxs) {
             try {
                 const info = await checkMoogoldOrderStatus(tx.providerReference);
-                if (info && info.status && info.status !== tx.status) {
-                    tx.status = info.status;
-                    if (info.status === 'failed') {
-                        tx.errorDetails = `MooGold: ${info.order_status}`;
+                if (info && info.status) {
+                    let changed = false;
+                    if (info.status !== tx.status) {
+                        tx.status = info.status;
+                        changed = true;
                     }
-                    await tx.save();
-                    console.log(`[Auto-Sync] Order #${tx.providerReference} updated to ${tx.status}`);
-                    sendEvent('transaction_updated', tx);
+                    if (info.status === 'completed' && tx.deliveryStatus !== 'delivered') {
+                        tx.deliveryStatus = 'delivered';
+                        changed = true;
+                    } else if (info.status === 'failed' && tx.deliveryStatus !== 'failed') {
+                        tx.deliveryStatus = 'failed';
+                        tx.errorDetails = `MooGold: ${info.order_status || 'delivery failed'}`;
+                        changed = true;
+                    } else if (info.status === 'processing' && tx.deliveryStatus !== 'sending') {
+                        tx.deliveryStatus = 'sending';
+                        changed = true;
+                    }
+                    if (changed) {
+                        await tx.save();
+                        console.log(`[Auto-Sync] Order #${tx.providerReference} updated: status=${tx.status}, delivery=${tx.deliveryStatus}`);
+                        sendEvent('transaction_updated', tx);
+                    }
                 }
             } catch (err) {
                 // Ignore temporary polling network errors

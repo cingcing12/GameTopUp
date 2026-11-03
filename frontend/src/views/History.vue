@@ -44,6 +44,54 @@ const formatDate = (dateString) => {
     timeStyle: 'short' 
   }).format(date)
 }
+
+// 2-Part Status Helpers: Payment & Diamond Delivery
+const getPaymentBadgeClass = (tx) => {
+  const p = tx.paymentStatus || ((tx.status === 'completed' || tx.status === 'processing' || tx.status === 'failed') ? 'paid' : 'unpaid')
+  if (p === 'paid') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+  if (p === 'refunded') return 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+  if (p === 'failed') return 'bg-red-500/10 text-red-400 border-red-500/30'
+  return 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+}
+
+const getPaymentDotClass = (tx) => {
+  const p = tx.paymentStatus || ((tx.status === 'completed' || tx.status === 'processing' || tx.status === 'failed') ? 'paid' : 'unpaid')
+  if (p === 'paid') return 'bg-emerald-400'
+  if (p === 'refunded') return 'bg-purple-400'
+  if (p === 'failed') return 'bg-red-400'
+  return 'bg-amber-400'
+}
+
+const getPaymentLabel = (tx) => {
+  const p = tx.paymentStatus || ((tx.status === 'completed' || tx.status === 'processing' || tx.status === 'failed') ? 'paid' : 'unpaid')
+  if (p === 'paid') return 'Paid'
+  if (p === 'refunded') return 'Refunded'
+  if (p === 'failed') return 'Payment Failed'
+  return 'Unpaid'
+}
+
+const getDeliveryBadgeClass = (tx) => {
+  const d = tx.deliveryStatus || (tx.status === 'completed' ? 'delivered' : tx.status === 'processing' ? 'sending' : tx.status === 'failed' ? 'failed' : 'pending')
+  if (d === 'delivered' || tx.status === 'completed') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+  if (d === 'sending' || tx.status === 'processing') return 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+  if (d === 'failed' || tx.status === 'failed') return 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+  return 'bg-gray-500/10 text-gray-400 border-gray-500/30'
+}
+
+const getDeliveryDotClass = (tx) => {
+  const d = tx.deliveryStatus || (tx.status === 'completed' ? 'delivered' : tx.status === 'processing' ? 'sending' : tx.status === 'failed' ? 'failed' : 'pending')
+  if (d === 'delivered' || tx.status === 'completed') return 'bg-emerald-400'
+  if (d === 'failed' || tx.status === 'failed') return 'bg-rose-400'
+  return 'bg-gray-400'
+}
+
+const getDeliveryLabel = (tx) => {
+  const d = tx.deliveryStatus || (tx.status === 'completed' ? 'delivered' : tx.status === 'processing' ? 'sending' : tx.status === 'failed' ? 'failed' : 'pending')
+  if (d === 'delivered' || tx.status === 'completed') return 'Delivered'
+  if (d === 'sending' || tx.status === 'processing') return 'Sending Diamonds'
+  if (d === 'failed' || tx.status === 'failed') return 'Delivery Failed'
+  return 'Pending'
+}
 </script>
 
 <template>
@@ -89,24 +137,48 @@ const formatDate = (dateString) => {
               <h3 class="font-bold text-white text-lg">{{ tx.gameId?.name || 'Unknown Game' }}</h3>
               <p class="text-sm text-gray-300 font-semibold mb-0.5">ID: {{ tx.playerId }} <span v-if="tx.serverId">({{ tx.serverId }})</span></p>
               <p class="text-xs text-gray-500">{{ formatDate(tx.createdAt) }}</p>
+              <p v-if="(tx.deliveryStatus === 'failed' || tx.status === 'failed') && tx.errorDetails" class="text-xs text-rose-400 mt-1 flex items-center gap-1 font-medium">
+                ⚠️ {{ tx.errorDetails }}
+              </p>
             </div>
           </div>
 
-          <div class="flex items-center gap-8">
+          <div class="flex flex-wrap items-center gap-4 sm:gap-6">
             <div class="text-right">
-              <p class="text-sm text-gray-400">Item</p>
+              <p class="text-xs text-gray-400 font-medium">Item</p>
               <p class="font-bold text-white">{{ tx.amount }} 💎</p>
             </div>
             <div class="text-right">
-              <p class="text-sm text-gray-400">Price</p>
+              <p class="text-xs text-gray-400 font-medium">Price</p>
               <p class="font-bold text-primary">${{ tx.price.toFixed(2) }}</p>
             </div>
-            <div class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
-                 :class="tx.status === 'completed' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 
-                         tx.status === 'failed' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 
-                         'bg-amber-500/10 text-amber-400 border border-amber-500/20'">
-              <span v-if="tx.status === 'processing' || tx.status === 'pending'" class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
-              {{ tx.status === 'processing' ? 'Sending' : tx.status }}
+
+            <!-- 2-Part Status Badges -->
+            <div class="flex items-center gap-2">
+              <!-- Part 1: Payment Status -->
+              <div class="flex flex-col items-end">
+                <span 
+                  class="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm"
+                  :class="getPaymentBadgeClass(tx)"
+                  :title="'Payment: ' + getPaymentLabel(tx)"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full" :class="getPaymentDotClass(tx)"></span>
+                  {{ getPaymentLabel(tx) }}
+                </span>
+              </div>
+
+              <!-- Part 2: Delivery Status -->
+              <div class="flex flex-col items-end">
+                <span 
+                  class="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm"
+                  :class="getDeliveryBadgeClass(tx)"
+                  :title="'Delivery: ' + getDeliveryLabel(tx)"
+                >
+                  <span v-if="(tx.deliveryStatus === 'sending' || tx.status === 'processing')" class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+                  <span v-else class="w-1.5 h-1.5 rounded-full" :class="getDeliveryDotClass(tx)"></span>
+                  {{ getDeliveryLabel(tx) }}
+                </span>
+              </div>
             </div>
           </div>
 

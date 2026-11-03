@@ -8,6 +8,16 @@ const transactionSchema = new mongoose.Schema({
   amount: { type: Number, required: true }, // How much premium currency they bought
   price: { type: Number, required: true }, // How much they paid
   paymentMethod: { type: String, required: true },
+  paymentStatus: { 
+    type: String, 
+    enum: ['unpaid', 'paid', 'refunded', 'failed'], 
+    default: 'paid' 
+  },
+  deliveryStatus: { 
+    type: String, 
+    enum: ['pending', 'sending', 'delivered', 'failed'], 
+    default: 'pending' 
+  },
   status: { type: String, enum: ['pending', 'processing', 'completed', 'failed'], default: 'pending' },
   providerReference: { type: String }, // Transaction ID / Order ID from MooGold
   paymentReference: { type: String, sparse: true, index: true }, // Payment hash (e.g. Bakong MD5) to prevent replay exploits

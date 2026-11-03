@@ -932,9 +932,12 @@ const searchedTransactions = computed(() => {
   if (!searchQuery.value) return transactions.value
   const query = searchQuery.value.toLowerCase()
   return transactions.value.filter(t => 
-    t.playerId.toLowerCase().includes(query) ||
-    t.paymentMethod.toLowerCase().includes(query) ||
-    t.status.toLowerCase().includes(query)
+    t.playerId?.toLowerCase().includes(query) ||
+    t.paymentMethod?.toLowerCase().includes(query) ||
+    t.status?.toLowerCase().includes(query) ||
+    t.paymentStatus?.toLowerCase().includes(query) ||
+    t.deliveryStatus?.toLowerCase().includes(query) ||
+    t.providerReference?.toLowerCase().includes(query)
   )
 })
 
@@ -960,7 +963,7 @@ const nextPage = () => {
 
 const totalRevenue = computed(() => {
   return transactions.value
-    .filter(t => t.status === 'completed')
+    .filter(t => t.status === 'completed' || t.deliveryStatus === 'delivered')
     .reduce((sum, t) => sum + Number(t.price), 0)
     .toFixed(2)
 })
@@ -968,7 +971,7 @@ const totalRevenue = computed(() => {
 const totalOrders = computed(() => transactions.value.length)
 
 const successfulOrders = computed(() => {
-  return transactions.value.filter(t => t.status === 'completed').length
+  return transactions.value.filter(t => t.status === 'completed' || t.deliveryStatus === 'delivered').length
 })
 
 // UI Helpers
@@ -983,6 +986,133 @@ const getStatusIcon = (status) => {
   if (status === 'failed') return XCircle
   if (status === 'processing') return RefreshCw
   return Clock
+}
+
+// Dual Status Helpers (Payment & Delivery)
+const getPaymentBadgeClass = (tx) => {
+  const p = tx.paymentStatus || ((tx.status === 'completed' || tx.status === 'processing' || tx.status === 'failed') ? 'paid' : 'unpaid')
+  if (p === 'paid') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+  if (p === 'refunded') return 'text-purple-400 bg-purple-500/10 border-purple-500/30'
+  if (p === 'failed') return 'text-red-400 bg-red-500/10 border-red-500/30'
+  return 'text-amber-400 bg-amber-500/10 border-amber-500/30'
+}
+
+const getPaymentDotClass = (tx) => {
+  const p = tx.paymentStatus || ((tx.status === 'completed' || tx.status === 'processing' || tx.status === 'failed') ? 'paid' : 'unpaid')
+  if (p === 'paid') return 'bg-emerald-400'
+  if (p === 'refunded') return 'bg-purple-400'
+  if (p === 'failed') return 'bg-red-400'
+  return 'bg-amber-400'
+}
+
+const getPaymentLabel = (tx) => {
+  const p = tx.paymentStatus || ((tx.status === 'completed' || tx.status === 'processing' || tx.status === 'failed') ? 'paid' : 'unpaid')
+  if (p === 'paid') return 'Paid'
+  if (p === 'refunded') return 'Refunded'
+  if (p === 'failed') return 'Failed'
+  return 'Unpaid'
+}
+
+const getDeliveryBadgeClass = (tx) => {
+  const d = tx.deliveryStatus || (tx.status === 'completed' ? 'delivered' : tx.status === 'processing' ? 'sending' : tx.status === 'failed' ? 'failed' : 'pending')
+  if (d === 'delivered' || tx.status === 'completed') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+  if (d === 'sending' || tx.status === 'processing') return 'text-amber-400 bg-amber-500/10 border-amber-500/30'
+  if (d === 'failed' || tx.status === 'failed') return 'text-rose-400 bg-rose-500/10 border-rose-500/30'
+  return 'text-gray-400 bg-gray-500/10 border-gray-500/30'
+}
+
+const getDeliveryIcon = (tx) => {
+  const d = tx.deliveryStatus || (tx.status === 'completed' ? 'delivered' : tx.status === 'processing' ? 'sending' : tx.status === 'failed' ? 'failed' : 'pending')
+  if (d === 'delivered' || tx.status === 'completed') return CheckCircle2
+  if (d === 'sending' || tx.status === 'processing') return RefreshCw
+  if (d === 'failed' || tx.status === 'failed') return XCircle
+  return Clock
+}
+
+const isDeliverySpinning = (tx) => {
+  const d = tx.deliveryStatus || (tx.status === 'completed' ? 'delivered' : tx.status === 'processing' ? 'sending' : tx.status === 'failed' ? 'failed' : 'pending')
+  return d === 'sending' || tx.status === 'processing'
+}
+
+const getDeliveryLabel = (tx) => {
+  const d = tx.deliveryStatus || (tx.status === 'completed' ? 'delivered' : tx.status === 'processing' ? 'sending' : tx.status === 'failed' ? 'failed' : 'pending')
+  if (d === 'delivered' || tx.status === 'completed') return 'Delivered'
+  if (d === 'sending' || tx.status === 'processing') return 'Sending'
+  if (d === 'failed' || tx.status === 'failed') return 'Delivery Failed'
+  return 'Pending'
+}
+
+// Quick action to re-check order status with MooGold
+const syncingTxId = ref(null)
+const recheckTxStatus = async (tx) => {
+  if (syncingTxId.value) return
+  syncingTxId.value = tx._id
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await authFetch(`${apiUrl}/api/transactions/${tx._id}/status`)
+    const data = await res.json()
+    if (res.ok && data.transaction) {
+      const idx = transactions.value.findIndex(t => t._id === tx._id)
+      if (idx !== -1) {
+        transactions.value[idx] = data.transaction
+      }
+      showToast(`Updated: Delivery is ${data.transaction.deliveryStatus || data.transaction.status}`, 'success')
+    } else {
+      showToast('Could not fetch status update', 'error')
+    }
+  } catch (err) {
+    showToast('Failed to check status: ' + err.message, 'error')
+  } finally {
+    syncingTxId.value = null
+  }
+}
+
+// Transaction Status Edit Modal State
+const showTxStatusModal = ref(false)
+const editingTx = ref(null)
+const editPaymentStatus = ref('paid')
+const editDeliveryStatus = ref('delivered')
+const editErrorDetails = ref('')
+const isSavingTxStatus = ref(false)
+
+const openTxStatusModal = (tx) => {
+  editingTx.value = tx
+  editPaymentStatus.value = tx.paymentStatus || ((tx.status === 'completed' || tx.status === 'processing' || tx.status === 'failed') ? 'paid' : 'unpaid')
+  editDeliveryStatus.value = tx.deliveryStatus || (tx.status === 'completed' ? 'delivered' : tx.status === 'processing' ? 'sending' : tx.status === 'failed' ? 'failed' : 'pending')
+  editErrorDetails.value = tx.errorDetails || ''
+  showTxStatusModal.value = true
+}
+
+const saveTxStatus = async () => {
+  if (!editingTx.value) return
+  isSavingTxStatus.value = true
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await authFetch(`${apiUrl}/api/transactions/${editingTx.value._id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        paymentStatus: editPaymentStatus.value,
+        deliveryStatus: editDeliveryStatus.value,
+        errorDetails: editErrorDetails.value
+      })
+    })
+    const data = await res.json()
+    if (res.ok && data.transaction) {
+      const idx = transactions.value.findIndex(t => t._id === editingTx.value._id)
+      if (idx !== -1) {
+        transactions.value[idx] = data.transaction
+      }
+      showToast('Transaction status updated successfully!', 'success')
+      showTxStatusModal.value = false
+    } else {
+      showToast(data.message || 'Failed to update transaction', 'error')
+    }
+  } catch (err) {
+    showToast('Error updating transaction: ' + err.message, 'error')
+  } finally {
+    isSavingTxStatus.value = false
+  }
 }
 
 const formatDate = (dateString) => {
@@ -1206,10 +1336,10 @@ const formatDate = (dateString) => {
                 <tr>
                   <th scope="col" class="px-6 py-4 font-semibold">Date</th>
                   <th scope="col" class="px-6 py-4 font-semibold">Game / Account</th>
-                  <th scope="col" class="px-6 py-4 font-semibold">Item</th>
-                  <th scope="col" class="px-6 py-4 font-semibold">Amount</th>
-                  <th scope="col" class="px-6 py-4 font-semibold">Payment</th>
-                  <th scope="col" class="px-6 py-4 font-semibold">Status</th>
+                  <th scope="col" class="px-6 py-4 font-semibold">Item & Price</th>
+                  <th scope="col" class="px-6 py-4 font-semibold">Payment Status</th>
+                  <th scope="col" class="px-6 py-4 font-semibold">Diamond Delivery</th>
+                  <th scope="col" class="px-6 py-4 font-semibold text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -1237,20 +1367,53 @@ const formatDate = (dateString) => {
                     <div class="text-sm font-semibold text-gray-300">ID: {{ tx.playerId }}</div>
                     <div class="text-xs text-gray-500 mt-0.5" v-if="tx.serverId">Zone: {{ tx.serverId }}</div>
                   </td>
-                  <td class="px-6 py-4 text-white font-medium">
-                    {{ tx.amount }} Diamonds
-                  </td>
-                  <td class="px-6 py-4 font-bold text-white">
-                    ${{ Number(tx.price).toFixed(2) }}
-                  </td>
-                  <td class="px-6 py-4 uppercase text-xs font-bold tracking-wider">
-                    {{ tx.paymentMethod }}
+                  <td class="px-6 py-4">
+                    <div class="font-bold text-white">{{ tx.amount }} 💎</div>
+                    <div class="text-xs font-bold text-primary mt-0.5">${{ Number(tx.price).toFixed(2) }}</div>
                   </td>
                   <td class="px-6 py-4">
-                    <span class="px-3 py-1 text-xs font-bold border rounded-full flex items-center gap-1.5 w-fit uppercase tracking-wider shadow-sm" :class="getStatusColor(tx.status)">
-                      <component :is="getStatusIcon(tx.status)" class="w-3.5 h-3.5" :class="tx.status === 'processing' ? 'animate-spin' : ''" />
-                      {{ tx.status === 'processing' ? 'Sending' : tx.status }}
-                    </span>
+                    <div class="flex flex-col gap-1">
+                      <span class="px-2.5 py-1 text-xs font-bold border rounded-full flex items-center gap-1.5 w-fit uppercase tracking-wider shadow-sm" :class="getPaymentBadgeClass(tx)">
+                        <span class="w-1.5 h-1.5 rounded-full" :class="getPaymentDotClass(tx)"></span>
+                        {{ getPaymentLabel(tx) }}
+                      </span>
+                      <span class="text-[11px] text-gray-500 uppercase font-mono">{{ tx.paymentMethod || 'KHQR' }}</span>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4">
+                    <div class="flex flex-col gap-1">
+                      <span class="px-2.5 py-1 text-xs font-bold border rounded-full flex items-center gap-1.5 w-fit uppercase tracking-wider shadow-sm" :class="getDeliveryBadgeClass(tx)">
+                        <component :is="getDeliveryIcon(tx)" class="w-3.5 h-3.5" :class="isDeliverySpinning(tx) ? 'animate-spin' : ''" />
+                        {{ getDeliveryLabel(tx) }}
+                      </span>
+                      <span v-if="tx.providerReference" class="text-[11px] text-gray-400 font-mono">
+                        MooGold #{{ tx.providerReference }}
+                      </span>
+                      <span v-if="tx.errorDetails && (tx.deliveryStatus === 'failed' || tx.status === 'failed')" class="text-[11px] text-rose-400 font-medium max-w-xs truncate" :title="tx.errorDetails">
+                        {{ tx.errorDetails }}
+                      </span>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <button 
+                        @click="openTxStatusModal(tx)" 
+                        class="px-2.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 shadow-sm"
+                        title="Update Payment or Delivery Status"
+                      >
+                        <Edit class="w-3 h-3" />
+                        Update
+                      </button>
+                      <button 
+                        @click="recheckTxStatus(tx)" 
+                        :disabled="syncingTxId === tx._id" 
+                        class="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-gray-300 hover:text-white transition-all inline-flex items-center gap-1.5 disabled:opacity-50"
+                        title="Sync live status with MooGold"
+                      >
+                        <RefreshCw class="w-3 h-3" :class="syncingTxId === tx._id ? 'animate-spin text-primary' : ''" />
+                        Sync
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -1919,6 +2082,145 @@ const formatDate = (dateString) => {
         <p class="text-white font-bold text-sm pr-4">{{ toast.message }}</p>
       </div>
     </div>
+    <!-- Update Transaction Status Modal -->
+    <div v-if="showTxStatusModal" class="fixed inset-0 z-[160] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showTxStatusModal = false"></div>
+      <div class="glass-card max-w-lg w-full p-6 sm:p-8 rounded-3xl border border-white/10 shadow-2xl relative z-10 bg-[#0d0f14] overflow-hidden">
+        <!-- Close Button -->
+        <button @click="showTxStatusModal = false" class="absolute top-6 right-6 text-gray-400 hover:text-white transition-colors">
+          <XCircle class="w-6 h-6" />
+        </button>
+
+        <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-2">
+          <Edit class="w-5 h-5 text-primary" />
+          Update Transaction Status
+        </h3>
+        <p class="text-xs text-gray-400 mb-6">Manually adjust payment and diamond delivery statuses for this order.</p>
+
+        <!-- Order Summary Card -->
+        <div v-if="editingTx" class="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6 space-y-2">
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-gray-400">Game & Player:</span>
+            <span class="text-white font-semibold">{{ editingTx.gameId?.name || 'Unknown' }} ({{ editingTx.playerId }})</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-gray-400">Item & Price:</span>
+            <span class="text-primary font-bold">{{ editingTx.amount }} 💎 (${{ Number(editingTx.price).toFixed(2) }})</span>
+          </div>
+          <div class="flex justify-between items-center text-sm" v-if="editingTx.providerReference">
+            <span class="text-gray-400">MooGold Order:</span>
+            <span class="text-amber-400 font-mono text-xs">#{{ editingTx.providerReference }}</span>
+          </div>
+        </div>
+
+        <form @submit.prevent="saveTxStatus" class="space-y-4">
+          <!-- 1. Payment Status -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">
+              Payment Status (User Money)
+            </label>
+            <div class="grid grid-cols-3 gap-2">
+              <button 
+                type="button" 
+                @click="editPaymentStatus = 'paid'"
+                class="py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                :class="editPaymentStatus === 'paid' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-sm' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'"
+              >
+                <CheckCircle2 class="w-3.5 h-3.5" />
+                Paid
+              </button>
+              <button 
+                type="button" 
+                @click="editPaymentStatus = 'unpaid'"
+                class="py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                :class="editPaymentStatus === 'unpaid' ? 'bg-amber-500/20 text-amber-400 border-amber-500 shadow-sm' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'"
+              >
+                <Clock class="w-3.5 h-3.5" />
+                Unpaid
+              </button>
+              <button 
+                type="button" 
+                @click="editPaymentStatus = 'refunded'"
+                class="py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                :class="editPaymentStatus === 'refunded' ? 'bg-purple-500/20 text-purple-400 border-purple-500 shadow-sm' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'"
+              >
+                <Wallet class="w-3.5 h-3.5" />
+                Refunded
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. Diamond Delivery Status -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">
+              Diamond Delivery Status (In-Game Delivery)
+            </label>
+            <div class="grid grid-cols-3 gap-2">
+              <button 
+                type="button" 
+                @click="editDeliveryStatus = 'delivered'"
+                class="py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                :class="editDeliveryStatus === 'delivered' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-sm' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'"
+              >
+                <CheckCircle2 class="w-3.5 h-3.5" />
+                Delivered
+              </button>
+              <button 
+                type="button" 
+                @click="editDeliveryStatus = 'sending'"
+                class="py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                :class="editDeliveryStatus === 'sending' ? 'bg-amber-500/20 text-amber-400 border-amber-500 shadow-sm' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'"
+              >
+                <RefreshCw class="w-3.5 h-3.5" />
+                Sending
+              </button>
+              <button 
+                type="button" 
+                @click="editDeliveryStatus = 'failed'"
+                class="py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                :class="editDeliveryStatus === 'failed' ? 'bg-rose-500/20 text-rose-400 border-rose-500 shadow-sm' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'"
+              >
+                <XCircle class="w-3.5 h-3.5" />
+                Failed
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. Notes / Error Details -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">
+              Admin Note / Reason
+            </label>
+            <input 
+              v-model="editErrorDetails" 
+              type="text" 
+              placeholder="e.g. Manually delivered in game, or Refunded to customer"
+              class="w-full bg-darker/60 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-all"
+            />
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex items-center gap-3 pt-4">
+            <button 
+              type="button" 
+              @click="showTxStatusModal = false"
+              class="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              :disabled="isSavingTxStatus"
+              class="flex-1 py-3 rounded-xl bg-primary hover:bg-yellow-400 text-darker font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-50"
+            >
+              <RefreshCw v-if="isSavingTxStatus" class="w-4 h-4 animate-spin" />
+              Save Status
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- MooGold Import Modal -->
     <div v-if="showMoogoldModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showMoogoldModal = false"></div>
