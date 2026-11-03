@@ -2,10 +2,22 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 const Game = require('../models/Game');
 const { requireAdmin, requireAuth } = require('../middleware/auth');
 
 const BASE_URL = 'https://moogold.com/wp-json/v1/api';
+
+// Permanent Static Dedicated Proxies (whitelisted with MooGold: 45.38.107.97 and 31.59.20.176)
+const STATIC_PROXIES = [
+    process.env.MOOGOLD_PROXY,
+    'http://zjvnatap:ioo73nj265iy@45.38.107.97:6014',
+    'http://zjvnatap:ioo73nj265iy@31.59.20.176:6754'
+].filter(Boolean);
+
+let activeProxyIndex = 0;
 
 // Safe sanitization helper against injections & path traversals
 const sanitizeInput = (val, maxLen = 35) => {
@@ -46,7 +58,7 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // Helper function to generate auth headers and execute MooGold API requests
-const moogoldRequest = async (path, payloadData = {}) => {
+const moogoldRequest = async (path, payloadData = {}, attempt = 0) => {
     const partnerId = (process.env.MOOGOLD_PARTNER_ID || '').trim();
     const secret = (process.env.MOOGOLD_SECRET || '').trim();
 
@@ -72,24 +84,30 @@ const moogoldRequest = async (path, payloadData = {}) => {
         'Content-Type': 'application/json'
     };
 
+    const currentProxy = STATIC_PROXIES.length > 0 ? STATIC_PROXIES[activeProxyIndex % STATIC_PROXIES.length] : null;
+    const httpsAgent = currentProxy ? new HttpsProxyAgent(currentProxy) : undefined;
+
     const axiosConfig = {
         method: 'POST',
         url: `${BASE_URL}/${path}`,
         headers,
         data: body,
+        httpsAgent,
         timeout: 25000
     };
-
-    // Optional proxy if specified
-    if (process.env.MOOGOLD_PROXY) {
-        const { HttpsProxyAgent } = require('https-proxy-agent');
-        axiosConfig.httpsAgent = new HttpsProxyAgent(process.env.MOOGOLD_PROXY);
-    }
 
     try {
         const response = await axios(axiosConfig);
         return response.data;
     } catch (error) {
+        // If proxy failed (auth, timeout, connection reset), rotate and retry with next proxy
+        const isProxyError = error.code === 'ECONNRESET' || error.message.includes('407') || error.message.includes('ECONNREFUSED');
+        if (isProxyError && attempt < STATIC_PROXIES.length) {
+            console.warn(`[MooGold Proxy] Proxy at index ${activeProxyIndex} encountered issue (${error.message}). Retrying next static proxy...`);
+            activeProxyIndex = (activeProxyIndex + 1) % STATIC_PROXIES.length;
+            return moogoldRequest(path, payloadData, attempt + 1);
+        }
+
         // Redact any headers/secrets from error logs to prevent credential leakage
         const safeErr = error.response ? {
             status: error.response.status,
@@ -139,6 +157,28 @@ router.get('/balance', requireAdmin, async (req, res) => {
             balance_usd: 0,
             error: 'Failed to fetch MooGold balance'
         });
+    }
+});
+
+// GET /api/moogold/test-proxy - Verify outgoing static IP [ADMIN ONLY]
+router.get('/test-proxy', requireAdmin, async (req, res) => {
+    try {
+        const results = [];
+        for (const proxy of STATIC_PROXIES) {
+            try {
+                const agent = new HttpsProxyAgent(proxy);
+                const testRes = await axios.get('https://api.ipify.org?format=json', {
+                    httpsAgent: agent,
+                    timeout: 8000
+                });
+                results.push({ proxy: proxy.replace(/:[^:]*@/, ':***@'), ip: testRes.data.ip, status: 'ok' });
+            } catch (err) {
+                results.push({ proxy: proxy.replace(/:[^:]*@/, ':***@'), error: err.message, status: 'failed' });
+            }
+        }
+        res.json({ success: true, proxies: results });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
