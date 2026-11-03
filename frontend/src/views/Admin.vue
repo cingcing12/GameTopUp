@@ -183,41 +183,41 @@ const filteredGamesList = computed(() => {
   )
 })
 
-// VIP Reseller Import State
-const showVipModal = ref(false)
-const vipGames = ref([])
-const searchVipQuery = ref('')
-const isFetchingVip = ref(false)
+// MooGold Import State
+const showMoogoldModal = ref(false)
+const moogoldGames = ref([])
+const searchMoogoldQuery = ref('')
+const isFetchingMoogold = ref(false)
 
-const filteredVipGames = computed(() => {
-  if (!searchVipQuery.value) return vipGames.value
-  const q = searchVipQuery.value.toLowerCase()
-  return vipGames.value.filter(g => 
+const filteredMoogoldGames = computed(() => {
+  if (!searchMoogoldQuery.value) return moogoldGames.value
+  const q = searchMoogoldQuery.value.toLowerCase()
+  return moogoldGames.value.filter(g => 
     (g.name && g.name.toLowerCase().includes(q)) || 
-    (g.game && g.game.toLowerCase().includes(q))
+    (g.post_title && g.post_title.toLowerCase().includes(q))
   )
 })
 
-const openVipModal = async () => {
-  showVipModal.value = true
-  if (vipGames.value.length === 0) {
-    isFetchingVip.value = true
+const openMoogoldModal = async () => {
+  showMoogoldModal.value = true
+  if (moogoldGames.value.length === 0) {
+    isFetchingMoogold.value = true
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-      const res = await authFetch(`${apiUrl}/api/vipreseller/games`)
+      const res = await authFetch(`${apiUrl}/api/moogold/games`)
       const data = await res.json()
       if (res.ok && data.games) {
-        vipGames.value = data.games
+        moogoldGames.value = data.games
       }
     } catch (error) {
-      showToast('Failed to fetch VIP Reseller games', 'error')
+      showToast('Failed to fetch MooGold games', 'error')
     } finally {
-      isFetchingVip.value = false
+      isFetchingMoogold.value = false
     }
   }
 }
 
-const importVipGame = async (vGame) => {
+const importMoogoldGame = async (mgGame) => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     const res = await authFetch(`${apiUrl}/api/games`, {
@@ -226,12 +226,12 @@ const importVipGame = async (vGame) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        name: vGame.name,
-        publisher: 'VIP Reseller',
-        provider: 'vipreseller',
-        vipResellerGame: vGame.game,
-        image: vGame.sampleImage || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
-        rapidApiId: vGame.rapidApiId || 'mobile-legends',
+        name: mgGame.name || mgGame.post_title,
+        moogoldId: mgGame.ID || mgGame.moogoldId,
+        publisher: 'MooGold',
+        provider: 'moogold',
+        image: mgGame.sampleImage || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
+        rapidApiId: mgGame.rapidApiId || 'mobile-legends',
         isActive: true
       })
     })
@@ -239,8 +239,8 @@ const importVipGame = async (vGame) => {
     if (res.ok) {
       const newGame = await res.json()
       games.value.push(newGame)
-      showToast(`${vGame.name} imported from VIP Reseller!`, 'success')
-      showVipModal.value = false
+      showToast(`${mgGame.name || mgGame.post_title} imported from MooGold!`, 'success')
+      showMoogoldModal.value = false
     } else {
       showToast('Failed to import game', 'error')
     }
@@ -249,93 +249,24 @@ const importVipGame = async (vGame) => {
   }
 }
 
-// VIP Reseller Live Wallet State
-const vipWalletBalance = ref(0)
-const vipWalletIdr = ref(0)
-const vipAccountUsername = ref('')
-const isFetchingVipBalance = ref(false)
+// MooGold Live Wallet State
+const moogoldWalletBalance = ref(0)
+const moogoldCurrency = ref('USD')
+const isFetchingMoogoldBalance = ref(false)
 
-const fetchVipBalance = async () => {
-  isFetchingVipBalance.value = true
+const fetchMoogoldBalance = async () => {
+  isFetchingMoogoldBalance.value = true
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await rawFetch(`${apiUrl}/api/vipreseller/balance`)
+    const res = await authFetch(`${apiUrl}/api/moogold/balance`)
     const data = await res.json()
     if (res.ok && data.success) {
-      vipWalletBalance.value = data.balance_usd || 0
-      vipWalletIdr.value = data.deposit || data.balance_idr || 0
-      vipAccountUsername.value = data.username || data.full_name || ''
+      moogoldWalletBalance.value = data.balance_usd || data.balance || 0
+      moogoldCurrency.value = data.currency || 'USD'
     }
   } catch (e) {
   } finally {
-    isFetchingVipBalance.value = false
-  }
-}
-
-// Digiflazz Import State
-const showDigiflazzModal = ref(false)
-const digiflazzGames = ref([])
-const searchDigiflazzQuery = ref('')
-const isFetchingDigiflazz = ref(false)
-
-const filteredDigiflazzGames = computed(() => {
-  if (!searchDigiflazzQuery.value) return digiflazzGames.value
-  const q = searchDigiflazzQuery.value.toLowerCase()
-  return digiflazzGames.value.filter(g => 
-    (g.name && g.name.toLowerCase().includes(q)) || 
-    (g.brand && g.brand.toLowerCase().includes(q))
-  )
-})
-
-const openDigiflazzModal = async () => {
-  showDigiflazzModal.value = true
-  if (digiflazzGames.value.length === 0) {
-    isFetchingDigiflazz.value = true
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-      const res = await authFetch(`${apiUrl}/api/digiflazz/games`)
-      const data = await res.json()
-      if (res.ok && data.games) {
-        digiflazzGames.value = data.games
-      }
-    } catch (error) {
-      showToast('Failed to fetch Digiflazz games', 'error')
-    } finally {
-      isFetchingDigiflazz.value = false
-    }
-  }
-}
-
-const importDigiflazzGame = async (dfGame) => {
-  try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await authFetch(`${apiUrl}/api/games`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        name: dfGame.name,
-        publisher: 'Digiflazz',
-        provider: 'digiflazz',
-        digiflazzBrand: dfGame.brand,
-        digiflazzType: 'GLOBAL',
-        image: dfGame.sampleImage || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
-        rapidApiId: dfGame.rapidApiId || 'mobile-legends',
-        isActive: true
-      })
-    })
-    
-    if (res.ok) {
-      const newGame = await res.json()
-      games.value.push(newGame)
-      showToast(`${dfGame.name} imported from Digiflazz!`, 'success')
-      showDigiflazzModal.value = false
-    } else {
-      showToast('Failed to import game', 'error')
-    }
-  } catch (error) {
-    showToast('Error importing game', 'error')
+    isFetchingMoogoldBalance.value = false
   }
 }
 
@@ -577,38 +508,34 @@ const openPricingModal = async (game) => {
   
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const isVip = game.provider === 'vipreseller' || (!game.provider && !game.digiflazzBrand)
+    const targetId = game.moogoldId || game._id
+    const res = await fetch(`${apiUrl}/api/moogold/products/${targetId}`)
+    const data = await res.json()
     
-    let url = ''
-    if (isVip) {
-      url = `${apiUrl}/api/vipreseller/products?game=${encodeURIComponent(game.vipResellerGame || game.name)}`
-    } else {
-      const brand = game.digiflazzBrand || 'MOBILE LEGENDS';
-      const typeParam = game.digiflazzType ? `&type=${encodeURIComponent(game.digiflazzType)}` : '';
-      url = `${apiUrl}/api/digiflazz/products?brand=${encodeURIComponent(brand)}${typeParam}`;
-    }
-
-    const res = await fetch(url);
-    const data = await res.json();
-    
-    if (res.ok && data?.data) {
-      if (data.exchange_rate?.rate) {
-        liveExchangeRate.value = data.exchange_rate.rate;
-      }
-      const activeList = data.data.filter(p => p.status === 'Active' || p.buyer_product_status);
-      const sortedList = (activeList.length > 0 ? activeList : data.data).sort((a, b) => (a.price_usd || 0) - (b.price_usd || 0));
+    if (res.ok && data?.Variation) {
+      const activeList = data.Variation.filter(p => p.stock_status === 'instock')
+      const sortedList = (activeList.length > 0 ? activeList : data.Variation).sort((a, b) => (parseFloat(a.variation_price) || 0) - (parseFloat(b.variation_price) || 0))
 
       gamePackages.value = sortedList.map(p => {
-        const customP = game.customPrices && game.customPrices[p.buyer_sku_code];
+        let cleanName = p.variation_name || ''
+        if (cleanName.includes(' - ')) {
+          cleanName = cleanName.substring(cleanName.indexOf(' - ') + 3)
+        }
+        if (cleanName.includes(' (#')) {
+          cleanName = cleanName.substring(0, cleanName.indexOf(' (#'))
+        }
+        const customP = game.customPrices && game.customPrices[p.variation_id.toString()]
+        const unitPrice = parseFloat(p.variation_price || 0)
+        const origPrice = parseFloat(p.original_price || unitPrice)
+
         return {
-          id: p.buyer_sku_code,
-          name: p.product_name,
-          priceIdr: p.price_idr || 0,
-          originalPrice: p.price_usd,
-          customPrice: customP !== undefined ? parseFloat(customP) : p.price_usd,
-          customImage: game.customImages && game.customImages[p.buyer_sku_code] ? game.customImages[p.buyer_sku_code] : null
-        };
-      });
+          id: p.variation_id.toString(),
+          name: cleanName.trim(),
+          originalPrice: origPrice,
+          customPrice: customP !== undefined ? parseFloat(customP) : unitPrice,
+          customImage: game.customImages && game.customImages[p.variation_id.toString()] ? game.customImages[p.variation_id.toString()] : null
+        }
+      })
     }
   } catch (error) {
     showToast('Failed to fetch packages', 'error')
@@ -993,7 +920,7 @@ onMounted(async () => {
     fetchTransactions()
     fetchUsers()
     fetchPages()
-    fetchVipBalance()
+    fetchMoogoldBalance()
   }
 })
 
@@ -1048,12 +975,13 @@ const successfulOrders = computed(() => {
 const getStatusColor = (status) => {
   if (status === 'completed') return 'text-green-400 bg-green-400/10 border-green-400/20'
   if (status === 'failed') return 'text-red-400 bg-red-400/10 border-red-400/20'
-  return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
+  return 'text-amber-400 bg-amber-400/10 border-amber-400/20'
 }
 
 const getStatusIcon = (status) => {
   if (status === 'completed') return CheckCircle2
   if (status === 'failed') return XCircle
+  if (status === 'processing') return RefreshCw
   return Clock
 }
 
@@ -1211,7 +1139,7 @@ const formatDate = (dateString) => {
             <p class="text-gray-400 font-medium">Monitor real-time top-ups and revenue.</p>
           </div>
           
-          <button @click="fetchTransactions(); fetchVipBalance()" class="bg-white/5 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl border border-white/10 font-semibold transition-all flex items-center gap-2 group">
+          <button @click="fetchTransactions(); fetchMoogoldBalance()" class="bg-white/5 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl border border-white/10 font-semibold transition-all flex items-center gap-2 group">
             <RefreshCw class="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
             Refresh Data
           </button>
@@ -1241,16 +1169,16 @@ const formatDate = (dateString) => {
             </p>
           </div>
 
-          <div class="glass-card p-6 border border-purple-500/30 bg-purple-500/[0.03] backdrop-blur-md rounded-2xl relative overflow-hidden group hover:border-purple-500/60 transition-all duration-300">
-            <div class="absolute -right-4 -bottom-4 p-4 opacity-10 text-purple-400 group-hover:scale-110 transition-transform"><Wallet class="w-24 h-24" /></div>
+          <div class="glass-card p-6 border border-amber-500/30 bg-amber-500/[0.03] backdrop-blur-md rounded-2xl relative overflow-hidden group hover:border-amber-500/60 transition-all duration-300">
+            <div class="absolute -right-4 -bottom-4 p-4 opacity-10 text-amber-400 group-hover:scale-110 transition-transform"><Wallet class="w-24 h-24" /></div>
             <div class="flex items-center justify-between mb-1">
-              <h3 class="text-gray-400 font-semibold text-xs uppercase tracking-wider">VIP Reseller Wallet</h3>
-              <span :class="vipWalletIdr > 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border">
-                {{ vipWalletIdr > 0 ? 'Funded' : 'Empty' }}
+              <h3 class="text-gray-400 font-semibold text-xs uppercase tracking-wider">MooGold Wallet</h3>
+              <span :class="moogoldWalletBalance > 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border">
+                {{ moogoldWalletBalance > 0 ? 'Funded' : 'Empty' }}
               </span>
             </div>
-            <p class="text-2xl font-black text-white font-outfit">Rp {{ Number(vipWalletIdr).toLocaleString() }}</p>
-            <p class="text-xs text-purple-300 font-mono mt-1">≈ ${{ Number(vipWalletBalance).toFixed(2) }} USD • {{ vipAccountUsername || 'Pheak1234' }}</p>
+            <p class="text-2xl font-black text-white font-outfit">${{ Number(moogoldWalletBalance).toFixed(2) }} {{ moogoldCurrency }}</p>
+            <p class="text-xs text-amber-300 font-mono mt-1">Live MooGold Partner Balance</p>
           </div>
         </div>
 
@@ -1320,8 +1248,8 @@ const formatDate = (dateString) => {
                   </td>
                   <td class="px-6 py-4">
                     <span class="px-3 py-1 text-xs font-bold border rounded-full flex items-center gap-1.5 w-fit uppercase tracking-wider shadow-sm" :class="getStatusColor(tx.status)">
-                      <component :is="getStatusIcon(tx.status)" class="w-3.5 h-3.5" />
-                      {{ tx.status }}
+                      <component :is="getStatusIcon(tx.status)" class="w-3.5 h-3.5" :class="tx.status === 'processing' ? 'animate-spin' : ''" />
+                      {{ tx.status === 'processing' ? 'Sending' : tx.status }}
                     </span>
                   </td>
                 </tr>
@@ -1383,11 +1311,8 @@ const formatDate = (dateString) => {
                   />
                 </div>
                 
-                <button @click="openVipModal" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl transition-all whitespace-nowrap flex items-center gap-2 shadow-lg shadow-purple-600/20">
-                  <Plus class="w-4 h-4" /> Import from VIP Reseller
-                </button>
-                <button @click="openDigiflazzModal" class="bg-white/10 hover:bg-white/15 text-gray-300 hover:text-white border border-white/10 font-bold py-2 px-3 rounded-xl transition-all whitespace-nowrap flex items-center gap-2 text-xs">
-                  <Plus class="w-3.5 h-3.5" /> Digiflazz
+                <button @click="openMoogoldModal" class="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-darker font-bold py-2 px-4 rounded-xl transition-all whitespace-nowrap flex items-center gap-2 shadow-lg shadow-amber-500/20">
+                  <Plus class="w-4 h-4" /> Import from MooGold
                 </button>
               </div>
             </div>
@@ -1428,8 +1353,8 @@ const formatDate = (dateString) => {
                 
                 <div class="flex items-center justify-between gap-2 mb-1">
                   <h3 class="text-lg font-bold text-white font-outfit truncate">{{ game.name }}</h3>
-                  <span :class="game.provider === 'vipreseller' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/30'" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shrink-0">
-                    {{ game.provider === 'vipreseller' ? 'VIP Reseller' : 'Digiflazz' }}
+                  <span class="bg-amber-500/20 text-amber-400 border-amber-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shrink-0">
+                    MooGold
                   </span>
                 </div>
                 <input 
@@ -1676,19 +1601,19 @@ const formatDate = (dateString) => {
         <h3 class="text-2xl font-black font-outfit text-white mb-1">Manage Prices & Profit</h3>
         <p class="text-gray-400 text-sm mb-5">Edit sell prices and monitor live profit margins for {{ selectedGameForPricing?.name }}</p>
 
-        <!-- Live Conversion Rate & Bulk Markup Toolbar -->
-        <div class="mb-5 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-transparent border border-blue-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <!-- MooGold Pricing & Quick Markup Toolbar -->
+        <div class="mb-5 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-transparent border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center text-lg shrink-0">
-              💱
+            <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg shrink-0">
+              💎
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{{ selectedGameForPricing?.provider === 'vipreseller' ? 'Live VIP Reseller Rate' : 'Live Provider Rate' }}</span>
-                <span class="px-2 py-0.2 rounded-full text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">Live Market</span>
+                <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">MooGold Direct Top-Up</span>
+                <span class="px-2 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">Official Catalog</span>
               </div>
               <p class="text-white font-extrabold text-sm sm:text-base">
-                $1.00 USD = <span class="text-primary font-black">Rp {{ Number(liveExchangeRate).toLocaleString() }} IDR</span>
+                Direct USD Pricing & Live Margins
               </p>
             </div>
           </div>
@@ -1737,11 +1662,10 @@ const formatDate = (dateString) => {
             
             <!-- Right: Cost in IDR, Cost in USD, Sell For, and Profit badge -->
             <div class="flex items-center justify-between md:justify-end gap-4 sm:gap-6 w-full md:w-7/12 flex-wrap sm:flex-nowrap">
-              <!-- Provider Cost (IDR + USD) -->
+              <!-- MooGold Cost (USD) -->
               <div class="flex flex-col text-left md:text-right shrink-0">
-                <span class="text-gray-500 text-[10px] uppercase font-bold tracking-wider">{{ selectedGameForPricing?.provider === 'vipreseller' ? 'VIP Cost' : 'Digiflazz Cost' }}</span>
+                <span class="text-gray-500 text-[10px] uppercase font-bold tracking-wider">MooGold Cost</span>
                 <span class="text-gray-200 font-extrabold text-sm">${{ pkg.originalPrice.toFixed(2) }}</span>
-                <span class="text-primary font-mono text-[11px]">Rp {{ Number(pkg.priceIdr || 0).toLocaleString() }}</span>
               </div>
               
               <!-- Sell Price Input + Profit Badge -->
@@ -1901,10 +1825,10 @@ const formatDate = (dateString) => {
               <div class="text-xs font-bold uppercase tracking-wide mt-1 px-2 py-0.5 rounded-full inline-block border"
                 :class="{
                   'bg-green-500/10 text-green-400 border-green-500/20': t.status === 'completed',
-                  'bg-yellow-500/10 text-yellow-400 border-yellow-500/20': t.status === 'pending',
+                  'bg-amber-500/10 text-amber-400 border-amber-500/20': t.status === 'pending' || t.status === 'processing',
                   'bg-red-500/10 text-red-400 border-red-500/20': t.status === 'failed'
                 }">
-                {{ t.status }}
+                {{ t.status === 'processing' ? 'Sending' : t.status }}
               </div>
             </div>
           </div>
@@ -1995,17 +1919,17 @@ const formatDate = (dateString) => {
         <p class="text-white font-bold text-sm pr-4">{{ toast.message }}</p>
       </div>
     </div>
-    <!-- VIP Reseller Import Modal -->
-    <div v-if="showVipModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showVipModal = false"></div>
+    <!-- MooGold Import Modal -->
+    <div v-if="showMoogoldModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showMoogoldModal = false"></div>
       
       <div class="relative bg-darker border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
-        <div class="p-6 border-b border-white/10 flex justify-between items-center bg-gradient-to-r from-purple-900/30 to-indigo-900/30">
+        <div class="p-6 border-b border-white/10 flex justify-between items-center bg-gradient-to-r from-amber-900/30 to-yellow-900/30">
           <h3 class="text-xl font-bold text-white flex items-center gap-2">
-            <Plus class="w-5 h-5 text-purple-400" />
-            Import Game from VIP Reseller
+            <Plus class="w-5 h-5 text-amber-400" />
+            Import Game from MooGold
           </h3>
-          <button @click="showVipModal = false" class="text-gray-400 hover:text-white transition-colors">
+          <button @click="showMoogoldModal = false" class="text-gray-400 hover:text-white transition-colors">
             <XCircle class="w-6 h-6" />
           </button>
         </div>
@@ -2015,84 +1939,31 @@ const formatDate = (dateString) => {
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
               type="text" 
-              v-model="searchVipQuery" 
-              placeholder="Search VIP Reseller games (e.g. Mobile Legends, Free Fire, PUBG)..." 
-              class="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+              v-model="searchMoogoldQuery" 
+              placeholder="Search MooGold games (e.g. Mobile Legends, Free Fire, PUBG)..." 
+              class="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
             />
           </div>
         </div>
         
         <div class="p-6 overflow-y-auto flex-1">
-          <div v-if="isFetchingVip" class="flex flex-col items-center justify-center py-12 text-gray-400">
-            <RefreshCw class="w-8 h-8 animate-spin mb-4 text-purple-400" />
-            <p>Fetching active games from VIP Reseller...</p>
+          <div v-if="isFetchingMoogold" class="flex flex-col items-center justify-center py-12 text-gray-400">
+            <RefreshCw class="w-8 h-8 animate-spin mb-4 text-amber-400" />
+            <p>Fetching active games from MooGold API...</p>
           </div>
-          <div v-else-if="filteredVipGames.length === 0" class="text-center py-8 text-gray-500">
+          <div v-else-if="filteredMoogoldGames.length === 0" class="text-center py-8 text-gray-500">
             No games found.
           </div>
           <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div v-for="vGame in filteredVipGames" :key="vGame.game" class="bg-black/40 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:border-purple-500/50 transition-all">
+            <div v-for="mgGame in filteredMoogoldGames" :key="mgGame.ID || mgGame.moogoldId" class="bg-black/40 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:border-amber-500/50 transition-all">
               <div class="flex items-center gap-3 flex-1 truncate pr-3">
-                <img :src="vGame.sampleImage" class="w-12 h-12 rounded-lg object-cover border border-white/10 shrink-0" />
+                <img :src="mgGame.sampleImage" class="w-12 h-12 rounded-lg object-cover border border-white/10 shrink-0" />
                 <div class="truncate">
-                  <p class="text-white font-semibold truncate">{{ vGame.name }}</p>
-                  <p class="text-xs text-purple-400 font-medium">{{ vGame.availableCount }} available • {{ vGame.itemsCount }} total</p>
+                  <p class="text-white font-semibold truncate">{{ mgGame.name || mgGame.post_title }}</p>
+                  <p class="text-xs text-amber-400 font-medium font-mono">ID: {{ mgGame.ID || mgGame.moogoldId }}</p>
                 </div>
               </div>
-              <button @click="importVipGame(vGame)" class="bg-purple-600/20 text-purple-400 hover:bg-purple-600 hover:text-white border border-purple-500/50 px-3.5 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap">
-                Import
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Digiflazz Import Modal -->
-    <div v-if="showDigiflazzModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showDigiflazzModal = false"></div>
-      
-      <div class="relative bg-darker border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
-        <div class="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
-          <h3 class="text-xl font-bold text-white flex items-center gap-2">
-            <Plus class="w-5 h-5 text-blue-400" />
-            Import Game from Digiflazz
-          </h3>
-          <button @click="showDigiflazzModal = false" class="text-gray-400 hover:text-white transition-colors">
-            <XCircle class="w-6 h-6" />
-          </button>
-        </div>
-        
-        <div class="p-6 border-b border-white/10">
-          <div class="relative w-full">
-            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input 
-              type="text" 
-              v-model="searchDigiflazzQuery" 
-              placeholder="Search Digiflazz games (e.g. Mobile Legends, Free Fire)..." 
-              class="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-            />
-          </div>
-        </div>
-        
-        <div class="p-6 overflow-y-auto flex-1">
-          <div v-if="isFetchingDigiflazz" class="flex flex-col items-center justify-center py-12 text-gray-400">
-            <RefreshCw class="w-8 h-8 animate-spin mb-4 text-blue-400" />
-            <p>Fetching active games from Digiflazz...</p>
-          </div>
-          <div v-else-if="filteredDigiflazzGames.length === 0" class="text-center py-8 text-gray-500">
-            No games found.
-          </div>
-          <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div v-for="dfGame in filteredDigiflazzGames" :key="dfGame.brand" class="bg-black/40 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:border-blue-500/50 transition-all">
-              <div class="flex items-center gap-3 flex-1 truncate pr-3">
-                <img :src="dfGame.sampleImage" class="w-12 h-12 rounded-lg object-cover border border-white/10 shrink-0" />
-                <div class="truncate">
-                  <p class="text-white font-semibold truncate">{{ dfGame.name }}</p>
-                  <p class="text-xs text-blue-400 font-medium">{{ dfGame.itemsCount }} packages • {{ dfGame.types.join(', ') }}</p>
-                </div>
-              </div>
-              <button @click="importDigiflazzGame(dfGame)" class="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-500/50 px-3.5 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap">
+              <button @click="importMoogoldGame(mgGame)" class="bg-amber-600/20 text-amber-400 hover:bg-amber-600 hover:text-white border border-amber-500/50 px-3.5 py-1.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap">
                 Import
               </button>
             </div>

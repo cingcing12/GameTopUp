@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { CheckCircle2, AlertCircle } from 'lucide-vue-next'
+import { CheckCircle2, AlertCircle, RefreshCw } from 'lucide-vue-next'
 import { useAuth } from '../composables/useAuth'
 
 const route = useRoute()
@@ -39,43 +39,39 @@ const needsZoneId = computed(() => {
 
 const loadGamePackages = async (dbGame) => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  const isVip = dbGame.provider === 'vipreseller' || (!dbGame.provider && !dbGame.digiflazzBrand);
-
-  let res;
-  if (isVip) {
-    const gameQuery = dbGame.vipResellerGame || dbGame.name || 'Mobile Legends B';
-    res = await fetch(`${apiUrl}/api/vipreseller/products?game=${encodeURIComponent(gameQuery)}`);
-  } else {
-    const brand = dbGame.digiflazzBrand || 'MOBILE LEGENDS';
-    const typeParam = dbGame.digiflazzType ? `&type=${encodeURIComponent(dbGame.digiflazzType)}` : '';
-    res = await fetch(`${apiUrl}/api/digiflazz/products?brand=${encodeURIComponent(brand)}${typeParam}`);
-  }
+  const targetId = dbGame.moogoldId || dbGame._id;
+  const res = await fetch(`${apiUrl}/api/moogold/products/${targetId}`);
   const data = await res.json();
   
-  if (res.ok && data?.data) {
-    const activeList = data.data.filter(item => item.status === 'Active' || item.buyer_product_status);
-    const sortedList = (activeList.length > 0 ? activeList : data.data).sort((a, b) => (a.price_usd || 0) - (b.price_usd || 0));
+  if (res.ok && data?.Variation) {
+    const activeList = data.Variation.filter(item => item.stock_status === 'instock');
+    const sortedList = (activeList.length > 0 ? activeList : data.Variation).sort((a, b) => (parseFloat(a.variation_price) || 0) - (parseFloat(b.variation_price) || 0));
     
     packages.value = sortedList.map(item => {
-      const rawName = item.product_name || '';
-      const match = rawName.match(/\d+/);
+      let cleanName = item.variation_name || '';
+      if (cleanName.includes(' - ')) {
+        cleanName = cleanName.substring(cleanName.indexOf(' - ') + 3);
+      }
+      if (cleanName.includes(' (#')) {
+        cleanName = cleanName.substring(0, cleanName.indexOf(' (#'));
+      }
+      
+      const match = cleanName.match(/\d+/);
       const parsedAmount = match ? parseInt(match[0]) : 1;
       
-      // Check for custom override price
-      const customP = dbGame.customPrices && dbGame.customPrices[item.buyer_sku_code];
-      const finalPrice = customP !== undefined ? parseFloat(customP) : item.price_usd;
+      const unitPrice = parseFloat(item.variation_price || 0);
+      const origPrice = parseFloat(item.original_price || unitPrice);
       
       return {
-        id: item.buyer_sku_code,
-        name: item.product_name,
+        id: item.variation_id.toString(),
+        name: cleanName.trim(),
         amount: parsedAmount,
         bonus: '',
-        tag: item.type || '',
-        price: finalPrice,
-        original_price: item.price_usd,
-        price_idr: item.price_idr,
+        tag: '',
+        price: unitPrice,
+        original_price: origPrice,
         icon: '💎',
-        stock_status: item.status === 'Active' ? 'instock' : 'outofstock'
+        stock_status: item.stock_status || 'instock'
       };
     });
   } else {
@@ -98,9 +94,8 @@ onMounted(async () => {
       gameInfo.value.banner = dbGame.banner || gameInfo.value.banner;
       gameInfo.value.currencyImage = dbGame.currencyImage || '💎';
       gameInfo.value.customImages = dbGame.customImages || {};
-      gameInfo.value.provider = dbGame.provider || 'vipreseller';
-      gameInfo.value.vipResellerGame = dbGame.vipResellerGame;
-      gameInfo.value.digiflazzBrand = dbGame.digiflazzBrand;
+      gameInfo.value.provider = 'moogold';
+      gameInfo.value.moogoldId = dbGame.moogoldId;
       
       // Load packages
       await loadGamePackages(dbGame);
@@ -166,6 +161,8 @@ const payments = [
 const isProcessing = ref(false)
 const transactionSuccess = ref(false)
 const transactionError = ref('')
+const currentTransaction = ref(null)
+let statusPollingInterval = null
 const khqrModalOpen = ref(false)
 const khqrData = ref(null)
 const isVerifyingPayment = ref(false)
@@ -202,14 +199,12 @@ const checkPlayerId = async () => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
-    const isVip = gameInfo.value?.provider === 'vipreseller' || (!gameInfo.value?.provider && !gameInfo.value?.digiflazzBrand);
-    const validateEndpoint = isVip ? `${apiUrl}/api/vipreseller/validate` : `${apiUrl}/api/digiflazz/validate`;
-
-    const validateRes = await fetch(validateEndpoint, {
+    const validateRes = await fetch(`${apiUrl}/api/moogold/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        gameId: gameId.length === 24 ? gameId : null,
+        dbGameId: gameId.length === 24 ? gameId : null,
+        gameId: gameId,
         playerId: playerId.value,
         zoneId: zoneId.value
       })
@@ -272,27 +267,21 @@ const handleCheckout = async () => {
       }
     }
 
-    // 2. Strict Provider Wallet Balance Check: Ensure provider has enough funds before generating payment QR
-    const isVip = gameInfo.value?.provider === 'vipreseller' || (!gameInfo.value?.provider && !gameInfo.value?.digiflazzBrand);
-    const balanceEndpoint = isVip ? `${apiUrl}/api/vipreseller/balance` : `${apiUrl}/api/digiflazz/balance`;
-    
+    // 2. Safe Provider Availability Check: Check stock without exposing provider wallet balance
     try {
-      const balanceRes = await fetch(balanceEndpoint);
-      const balanceData = await balanceRes.json();
-
-      const balanceIdr = balanceData.deposit !== undefined ? balanceData.deposit : (balanceData.balance_idr || 0);
-      const currentBalance = parseFloat(balanceData.balance_usd || balanceData.balance || 0);
       const requiredPrice = parseFloat(selectedPackage.value.price || 0);
-
-      // If balance is 0 or less than package price, block checkout gracefully
-      if (currentBalance <= 0 || balanceIdr <= 0 || currentBalance < requiredPrice) {
-        throw new Error('This item is temporarily out of stock. Please try again later.');
+      const availRes = await fetch(`${apiUrl}/api/moogold/check-availability?price=${encodeURIComponent(requiredPrice)}`);
+      if (availRes.ok) {
+        const availData = await availRes.json();
+        if (!availData.available) {
+          throw new Error('This package is temporarily out of stock. Please try again shortly or contact support.');
+        }
       }
     } catch (balanceErr) {
       if (balanceErr.message && balanceErr.message.includes('out of stock')) {
         throw balanceErr;
       }
-      throw new Error('Service is temporarily undergoing maintenance. Please try again later.');
+      console.warn('Could not verify supplier stock ahead of checkout, proceeding:', balanceErr);
     }
 
     // 2. Generate KHQR code: use lorndavid.online directly from browser for unlimited generation
@@ -466,6 +455,7 @@ const stopCountdown = () => {
 
 onUnmounted(() => {
   if (sseEventSource) sseEventSource.close()
+  if (statusPollingInterval) clearInterval(statusPollingInterval)
   stopCountdown()
 })
 
@@ -476,7 +466,7 @@ const confirmPaymentAndTopUp = async () => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     
-    // 2. Actually execute the Digiflazz transaction
+    // Execute the MooGold transaction
     const res = await fetch(`${apiUrl}/api/transactions`, {
       method: 'POST',
       headers: { 
@@ -500,9 +490,16 @@ const confirmPaymentAndTopUp = async () => {
       setTimeout(() => {
         isVerifyingPayment.value = false
         khqrModalOpen.value = false
+        currentTransaction.value = data.transaction
         transactionSuccess.value = true
-        showToast('Payment Verified! Top-Up Successful.', 'success')
-      }, 1500)
+        
+        if (data.transaction?.status === 'processing') {
+          showToast('Payment verified! MooGold is sending your diamonds...', 'info')
+          startStatusPolling(data.transaction._id)
+        } else {
+          showToast('Payment Verified! Top-Up Successful.', 'success')
+        }
+      }, 1000)
     } else {
       throw new Error(data.message || data.error || 'Failed to create transaction')
     }
@@ -512,6 +509,36 @@ const confirmPaymentAndTopUp = async () => {
     isVerifyingPayment.value = false
     khqrModalOpen.value = false
   }
+}
+
+const startStatusPolling = (txId) => {
+  if (statusPollingInterval) clearInterval(statusPollingInterval)
+  
+  statusPollingInterval = setInterval(async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+      const res = await fetch(`${apiUrl}/api/transactions/${txId}/status`)
+      const data = await res.json()
+      if (res.ok && data.transaction) {
+        currentTransaction.value = data.transaction
+        if (data.transaction.status === 'completed') {
+          clearInterval(statusPollingInterval)
+          showToast('Diamonds Delivered! Top-Up Completed!', 'success')
+        } else if (data.transaction.status === 'failed') {
+          clearInterval(statusPollingInterval)
+          showToast(data.transaction.errorDetails || 'MooGold delivery failed.', 'error')
+        }
+      }
+    } catch (e) {
+      // Ignore polling hiccups
+    }
+  }, 4000)
+}
+
+const resetCheckout = () => {
+  transactionSuccess.value = false
+  currentTransaction.value = null
+  if (statusPollingInterval) clearInterval(statusPollingInterval)
 }
 
 </script>
@@ -704,16 +731,55 @@ const confirmPaymentAndTopUp = async () => {
           </div>
         </div>
 
-        <!-- Checkout Summary -->
-        <div v-if="transactionSuccess" class="glass-card p-8 border border-green-500/50 shadow-[0_0_40px_rgba(34,197,94,0.15)] text-center animate-fade-in relative overflow-hidden">
-          <div class="absolute inset-0 bg-green-500/5"></div>
+        <!-- Checkout Result & Status Card -->
+        <div v-if="transactionSuccess" class="glass-card p-8 border rounded-2xl text-center animate-fade-in relative overflow-hidden transition-all duration-500"
+             :class="currentTransaction?.status === 'completed' 
+               ? 'border-green-500/50 shadow-[0_0_40px_rgba(34,197,94,0.15)] bg-green-500/5' 
+               : currentTransaction?.status === 'failed'
+               ? 'border-red-500/50 shadow-[0_0_40px_rgba(239,68,68,0.15)] bg-red-500/5'
+               : 'border-amber-500/50 shadow-[0_0_40px_rgba(245,158,11,0.15)] bg-amber-500/5'">
           <div class="relative z-10">
-            <div class="w-20 h-20 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-5 shadow-[0_0_20px_rgba(34,197,94,0.3)]">
-              <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+            <!-- Icon -->
+            <div v-if="currentTransaction?.status === 'completed'" class="w-20 h-20 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-5 shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+              <CheckCircle2 class="w-10 h-10" />
             </div>
-            <h3 class="text-2xl font-black text-white mb-2">Order Successful!</h3>
-            <p class="text-gray-400 mb-8 font-medium">Your premium currency is on its way.</p>
-            <button @click="transactionSuccess = false" class="w-full py-4 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-bold">Make Another Top-Up</button>
+            <div v-else-if="currentTransaction?.status === 'failed'" class="w-20 h-20 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto mb-5 shadow-[0_0_20px_rgba(239,68,68,0.3)]">
+              <AlertCircle class="w-10 h-10" />
+            </div>
+            <div v-else class="w-20 h-20 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-5 shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+              <RefreshCw class="w-10 h-10 animate-spin" />
+            </div>
+
+            <!-- Title -->
+            <h3 class="text-2xl font-black text-white mb-2 font-outfit">
+              {{ currentTransaction?.status === 'completed' ? 'Top-Up Completed!' : currentTransaction?.status === 'failed' ? 'Order Failed' : 'Payment Received — Sending Diamonds...' }}
+            </h3>
+
+            <!-- Details -->
+            <div v-if="currentTransaction?.status === 'completed'">
+              <p class="text-gray-300 mb-6 font-medium">Diamonds have been delivered successfully to your account!</p>
+            </div>
+            <div v-else-if="currentTransaction?.status === 'failed'">
+              <p class="text-red-400 mb-6 font-medium">{{ currentTransaction?.errorDetails || 'Failed to deliver diamonds. Please contact support.' }}</p>
+            </div>
+            <div v-else class="space-y-2 mb-6">
+              <p class="text-amber-300 font-semibold text-sm">
+                MooGold is currently sending to <span class="text-white font-mono">{{ playerId }} ({{ zoneId }})</span>.
+              </p>
+              <p class="text-gray-400 text-xs">
+                MooGold Order #{{ currentTransaction?.providerReference || 'Pending' }}. Status updates automatically once delivered by game server.
+              </p>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-col sm:flex-row gap-3 justify-center">
+              <button @click="resetCheckout" class="py-3 px-6 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-bold text-sm">
+                Make Another Top-Up
+              </button>
+              <router-link to="/history" class="py-3 px-6 bg-primary text-darker font-bold rounded-xl hover:bg-yellow-400 transition-all text-sm flex items-center justify-center gap-2">
+                View in History
+              </router-link>
+            </div>
           </div>
         </div>
 

@@ -6,14 +6,12 @@ const gameSchema = new mongoose.Schema({
   image: { type: String, required: true },
   banner: { type: String },
   currencyImage: { type: String, default: '💎' },
-  provider: { type: String, enum: ['vipreseller', 'digiflazz', 'manual'], default: 'vipreseller' },
-  vipResellerGame: { type: String },
-  digiflazzBrand: { type: String },
-  digiflazzType: { type: String, default: 'GLOBAL' },
+  provider: { type: String, default: 'moogold' },
+  moogoldId: { type: String },
   denominations: [{
-    amount: { type: Number, required: true }, // e.g., 100 Diamonds
-    price: { type: Number, required: true },  // e.g., $1.99
-    currencyName: { type: String, required: true } // e.g., 'Diamonds', 'UC'
+    amount: { type: Number, required: true },
+    price: { type: Number, required: true },
+    currencyName: { type: String, required: true }
   }],
   customPrices: {
     type: Map,

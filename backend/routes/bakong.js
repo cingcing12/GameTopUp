@@ -175,5 +175,76 @@ router.post('/check', async (req, res) => {
   return res.json({ success: false, message: 'Payment not found or pending' });
 });
 
-module.exports = router;
+const verifyBakongPayment = async (md5) => {
+  if (!md5 || typeof md5 !== 'string' || md5.trim().length < 16) {
+    return false;
+  }
+
+  // 1. Primary check: lorndavid.online
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/check/${md5}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*"
+      }
+    });
+
+    const text = await response.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      data = null;
+    }
+
+    if (data && (data.responseCode == 0 || data.errorCode == 0 || data.code == 0)) {
+      const txStatus = data.data?.status || data.transactionStatus || data.data?.transactionStatus;
+      if (!txStatus || txStatus.toString().toUpperCase() === 'SUCCESS') {
+        return true;
+      }
+    }
+  } catch (error) {
+    console.warn('lorndavid.online verify error:', error.message);
+  }
+
+  // 2. Secondary check: NBC OpenAPI
+  const token = process.env.BAKONG_TOKEN;
+  if (token) {
+    try {
+      const nbcUrl = process.env.BAKONG_OPENAPI_URL || 'https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5';
+      const response = await fetch(nbcUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ md5 })
+      });
+
+      const text = await response.text();
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = null;
+      }
+
+      if (data && (data.responseCode == 0 || data.errorCode == 0 || data.code == 0)) {
+        const txStatus = data.data?.status || data.transactionStatus || data.data?.transactionStatus;
+        if (!txStatus || txStatus.toString().toUpperCase() === 'SUCCESS') {
+          return true;
+        }
+      }
+    } catch (err) {
+      console.warn('NBC verify error:', err.message);
+    }
+  }
+
+  return false;
+};
+
+module.exports = {
+  router,
+  verifyBakongPayment
+};
 
