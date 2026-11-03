@@ -374,11 +374,13 @@ const displayTime = computed(() => {
 let countdownInterval = null
 let pollingInterval = null
 
+let pollCounter = 0
 const checkBakongPayment = async () => {
   if (!khqrData.value || !khqrData.value.md5) return;
   const LORNDAVID_API = 'https://lorndavid.online';
+  pollCounter++;
   
-  // 1. Primary check: check directly via lorndavid.online from client browser (no limits)
+  // 1. Primary check: check directly via lorndavid.online from client browser (no limits, bypasses datacenter blocks)
   try {
     const res = await fetch(`${LORNDAVID_API}/api/v1/check/${khqrData.value.md5}`)
     const text = await res.text()
@@ -401,28 +403,30 @@ const checkBakongPayment = async () => {
     // Ignore polling errors
   }
 
-  // 2. Secondary check via backend
-  try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    const res = await fetch(`${apiUrl}/api/bakong/check`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ md5: khqrData.value.md5 })
-    })
-    const text = await res.text()
-    let data = null
+  // 2. Secondary check via backend - runs once every 12s to protect NBC quotas
+  if (pollCounter % 3 === 0) {
     try {
-      data = JSON.parse(text)
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+      const res = await fetch(`${apiUrl}/api/bakong/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ md5: khqrData.value.md5 })
+      })
+      const text = await res.text()
+      let data = null
+      try {
+        data = JSON.parse(text)
+      } catch {
+        data = null
+      }
+      
+      if (res.ok && data?.success) {
+        stopCountdown()
+        await confirmPaymentAndTopUp()
+      }
     } catch {
-      data = null
+      // Silent fail for polling errors
     }
-    
-    if (res.ok && data?.success) {
-      stopCountdown()
-      await confirmPaymentAndTopUp()
-    }
-  } catch {
-    // Silent fail for polling errors
   }
 }
 
@@ -895,6 +899,16 @@ const resetCheckout = () => {
              </div>
              <div class="text-primary font-mono font-bold text-lg bg-primary/10 px-2 py-0.5 rounded">{{ displayTime }}</div>
           </div>
+
+          <!-- Instant Confirmation Button for Users Who Paid -->
+          <button 
+            @click="confirmPaymentAndTopUp"
+            :disabled="isVerifyingPayment"
+            class="w-full py-3.5 px-4 rounded-xl font-bold bg-primary text-black hover:bg-primary-hover hover:shadow-[0_0_20px_rgba(255,215,0,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            <span v-if="isVerifyingPayment" class="animate-spin rounded-full h-5 w-5 border-2 border-black border-t-transparent"></span>
+            <span>{{ isVerifyingPayment ? 'Verifying & Sending...' : 'I Have Paid (Send Diamonds)' }}</span>
+          </button>
 
         </div>
       </div>

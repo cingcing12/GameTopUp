@@ -43,10 +43,12 @@ router.post('/', authMiddleware, async (req, res) => {
       }
 
       // Verify payment directly with payment gateway
-      const isPaid = await verifyBakongPayment(cleanMd5);
+      const verification = await verifyBakongPayment(cleanMd5);
+      const isPaid = typeof verification === 'object' ? verification.verified : !!verification;
       if (!isPaid) {
         return res.status(400).json({ message: 'Payment verification failed with Bakong' });
       }
+      console.log(`[Bakong Verified] MD5: ${cleanMd5}, source: ${verification?.source || 'gateway'}`);
     }
 
     // 3. Price Tampering Protection
