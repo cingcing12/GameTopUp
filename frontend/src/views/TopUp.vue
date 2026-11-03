@@ -900,16 +900,6 @@ const resetCheckout = () => {
              <div class="text-primary font-mono font-bold text-lg bg-primary/10 px-2 py-0.5 rounded">{{ displayTime }}</div>
           </div>
 
-          <!-- Instant Confirmation Button for Users Who Paid -->
-          <button 
-            @click="confirmPaymentAndTopUp"
-            :disabled="isVerifyingPayment"
-            class="w-full py-3.5 px-4 rounded-xl font-bold bg-primary text-black hover:bg-primary-hover hover:shadow-[0_0_20px_rgba(255,215,0,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            <span v-if="isVerifyingPayment" class="animate-spin rounded-full h-5 w-5 border-2 border-black border-t-transparent"></span>
-            <span>{{ isVerifyingPayment ? 'Verifying & Sending...' : 'I Have Paid (Send Diamonds)' }}</span>
-          </button>
-
         </div>
       </div>
     </Teleport>
