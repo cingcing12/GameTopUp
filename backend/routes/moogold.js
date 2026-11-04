@@ -227,48 +227,55 @@ const getGameMetadata = (title) => {
         return {
             rapidApiId: 'mobile-legends',
             sampleImage: 'https://res.cloudinary.com/cqiocigr/image/upload/v1791781946/gametopup/v2cjgkslrnvsrr08k5q3.jpg',
-            needsZoneId: true
+            needsZoneId: true,
+            publisher: 'Moonton'
         };
     }
     if (t.includes('free fire')) {
         return {
             rapidApiId: 'freefire',
             sampleImage: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
-            needsZoneId: false
+            needsZoneId: false,
+            publisher: 'Garena'
         };
     }
     if (t.includes('pubg')) {
         return {
             rapidApiId: 'pubg-mobile',
             sampleImage: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80',
-            needsZoneId: false
+            needsZoneId: false,
+            publisher: 'Krafton'
         };
     }
     if (t.includes('genshin')) {
         return {
             rapidApiId: 'genshin-impact',
             sampleImage: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80',
-            needsZoneId: true
+            needsZoneId: true,
+            publisher: 'HoYoverse'
         };
     }
     if (t.includes('valorant')) {
         return {
             rapidApiId: 'valorant',
             sampleImage: 'https://images.unsplash.com/photo-1542751110-97427bbecf20?auto=format&fit=crop&w=600&q=80',
-            needsZoneId: false
+            needsZoneId: false,
+            publisher: 'Riot Games'
         };
     }
     if (t.includes('honor of kings')) {
         return {
             rapidApiId: 'honor-of-kings',
             sampleImage: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
-            needsZoneId: false
+            needsZoneId: false,
+            publisher: 'Level Infinite'
         };
     }
     return {
         rapidApiId: 'mobile-legends',
         sampleImage: 'https://images.unsplash.com/photo-1552820728-8b83bb6b773f?auto=format&fit=crop&w=600&q=80',
-        needsZoneId: false
+        needsZoneId: false,
+        publisher: 'Official'
     };
 };
 
@@ -295,7 +302,7 @@ router.get('/games', requireAdmin, async (req, res) => {
                     moogoldId: item.ID,
                     post_title: item.post_title,
                     name: item.post_title,
-                    publisher: 'MooGold',
+                    publisher: getGameMetadata(item.post_title).publisher || 'Official',
                     provider: 'moogold',
                     sampleImage: meta.sampleImage,
                     rapidApiId: meta.rapidApiId,
