@@ -31,9 +31,9 @@ const closeMenu = () => {
       <!-- Logo -->
       <div class="flex items-center gap-3 relative z-50 cursor-pointer group" @click="$router.push('/')">
         <div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(255,215,0,0.4)]">
-          <img src="/logo.jpg" alt="GameTopup Logo" class="w-full h-full object-cover" />
+          <img src="/logo.jpg" alt="Pheak Top-Up Logo" class="w-full h-full object-cover" />
         </div>
-        <span class="text-xl font-black font-outfit tracking-widest text-white hidden sm:block">GAME<span class="text-primary">TOPUP</span></span>
+        <span class="text-xl font-black font-outfit tracking-widest text-white hidden sm:block">PHEAK<span class="text-primary"> TOP-UP</span></span>
       </div>
       
       <!-- Desktop Links -->

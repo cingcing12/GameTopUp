@@ -8,9 +8,9 @@ import { Twitter, Instagram, Facebook, Gamepad2 } from 'lucide-vue-next'
       <div class="col-span-1 md:col-span-2">
         <div class="flex items-center gap-3 mb-4">
           <div class="w-10 h-10 rounded-full overflow-hidden border border-primary/50 shadow-[0_0_10px_rgba(255,215,0,0.2)]">
-            <img src="/logo.jpg" alt="GameTopup Logo" class="w-full h-full object-cover" />
+            <img src="/logo.jpg" alt="Pheak Top-Up Logo" class="w-full h-full object-cover" />
           </div>
-          <span class="text-xl font-black font-outfit tracking-wider text-white">GAME<span class="text-primary">TOPUP</span></span>
+          <span class="text-xl font-black font-outfit tracking-wider text-white">PHEAK<span class="text-primary"> TOP-UP</span></span>
         </div>
         <p class="text-gray-400 text-sm leading-relaxed max-w-sm mb-6">
           The most trusted, fastest, and secure platform for all your gaming top-up needs. We provide instant delivery 24/7.
@@ -43,7 +43,7 @@ import { Twitter, Instagram, Facebook, Gamepad2 } from 'lucide-vue-next'
     </div>
     
     <div class="max-w-7xl mx-auto px-6 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
-      <p>&copy; 2026 GameTopup. All rights reserved.</p>
+      <p>&copy; 2026 Pheak Top-Up. All rights reserved.</p>
       <div class="flex gap-4">
         <span>Made with 💛 for gamers.</span>
       </div>
