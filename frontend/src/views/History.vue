@@ -45,6 +45,22 @@ const formatDate = (dateString) => {
   }).format(date)
 }
 
+const formatErrorDetails = (details) => {
+  if (!details) return 'Delivery issue'
+  let str = details.toString()
+  str = str.replace(/moogold\s*callback:\s*/gi, '')
+  str = str.replace(/moogold:\s*/gi, '')
+  str = str.replace(/moogold\s*/gi, '')
+  str = str.replace(/rapidapi\s*/gi, '')
+  if (str.toLowerCase().includes('refunded')) {
+    return 'Delivery could not be completed (Refunded)'
+  }
+  if (str.toLowerCase().includes('incorrect-details') || str.toLowerCase().includes('invalid player')) {
+    return 'Incorrect Player ID or Zone ID'
+  }
+  return str.trim() || 'Delivery issue'
+}
+
 // 2-Part Status Helpers: Payment & Diamond Delivery
 const getPaymentBadgeClass = (tx) => {
   const p = tx.paymentStatus || ((tx.status === 'completed' || tx.status === 'processing' || tx.status === 'failed') ? 'paid' : 'unpaid')
@@ -138,7 +154,7 @@ const getDeliveryLabel = (tx) => {
               <p class="text-sm text-gray-300 font-semibold mb-0.5">ID: {{ tx.playerId }} <span v-if="tx.serverId">({{ tx.serverId }})</span></p>
               <p class="text-xs text-gray-500">{{ formatDate(tx.createdAt) }}</p>
               <p v-if="(tx.deliveryStatus === 'failed' || tx.status === 'failed') && tx.errorDetails" class="text-xs text-rose-400 mt-1 flex items-center gap-1 font-medium">
-                ⚠️ {{ tx.errorDetails }}
+                ⚠️ {{ formatErrorDetails(tx.errorDetails) }}
               </p>
             </div>
           </div>

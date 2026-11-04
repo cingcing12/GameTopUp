@@ -102,8 +102,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
       return res.status(201).json({
         message: isCompleted 
-          ? 'MooGold transaction completed successfully!' 
-          : 'MooGold transaction placed! Diamonds are currently sending to player account.',
+          ? 'Transaction completed successfully!' 
+          : 'Transaction placed! Diamonds are currently sending to player account.',
         transaction: savedTransaction,
         providerResponse: mooRes
       });
@@ -111,12 +111,15 @@ router.post('/', authMiddleware, async (req, res) => {
       savedTransaction.status = 'failed';
       savedTransaction.deliveryStatus = 'failed';
       savedTransaction.paymentStatus = 'paid'; // User money was paid, but delivery failed!
-      savedTransaction.errorDetails = providerErr.response?.data?.err_message || providerErr.response?.data?.message || providerErr.message;
+      const rawMsg = providerErr.response?.data?.err_message || providerErr.response?.data?.message || providerErr.message || 'Delivery failed';
+      let cleanMsg = rawMsg.toString().replace(/moogold:\s*/gi, '').replace(/moogold\s*/gi, '').trim();
+      if (cleanMsg.toLowerCase().includes('refunded')) cleanMsg = 'Delivery refunded';
+      savedTransaction.errorDetails = cleanMsg;
       await savedTransaction.save();
 
       return res.status(400).json({
-        message: providerErr.message || 'MooGold rejected the transaction',
-        error: providerErr.response?.data || providerErr.message
+        message: 'Unable to deliver diamonds at this time. Please contact support.',
+        error: cleanMsg
       });
     }
 
@@ -148,7 +151,7 @@ router.get('/:id/status', async (req, res) => {
           changed = true;
         } else if (orderInfo.status === 'failed' && tx.deliveryStatus !== 'failed') {
           tx.deliveryStatus = 'failed';
-          tx.errorDetails = `MooGold: ${orderInfo.order_status}`;
+          tx.errorDetails = orderInfo.order_status === 'refunded' ? 'Delivery refunded' : `Delivery ${orderInfo.order_status}`;
           changed = true;
         } else if (orderInfo.status === 'processing' && tx.deliveryStatus !== 'sending') {
           tx.deliveryStatus = 'sending';

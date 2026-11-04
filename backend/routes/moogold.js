@@ -503,11 +503,11 @@ const createMoogoldTransaction = async ({ productId, playerId, serverId, refId }
             status: isCompleted ? 'completed' : 'processing',
             order_status: rawStatus,
             ref_id: (result.order_id || result.transaction_id || cleanRefId).toString(),
-            message: result.message || (isCompleted ? 'MooGold order completed' : 'MooGold order placed, sending diamonds to player account'),
+            message: result.message || (isCompleted ? 'Order completed successfully' : 'Order placed, sending diamonds to player account'),
             data: result
         };
     } else {
-        const errMsg = result?.err_message || result?.message || 'MooGold rejected the order';
+        const errMsg = result?.err_message || result?.message || 'Unable to place order';
         const err = new Error(errMsg);
         err.response = { data: result };
         throw err;
@@ -566,7 +566,7 @@ router.post('/callback', async (req, res) => {
                 } else if (order_status === 'refunded' || order_status === 'failed' || order_status === 'cancelled' || order_status === 'incorrect-details') {
                     tx.status = 'failed';
                     tx.deliveryStatus = 'failed';
-                    tx.errorDetails = `MooGold callback: ${order_status}`;
+                    tx.errorDetails = order_status === 'refunded' ? 'Delivery refunded' : `Delivery ${order_status}`;
                 } else if (order_status === 'sending' || order_status === 'processing') {
                     tx.status = 'processing';
                     tx.deliveryStatus = 'sending';

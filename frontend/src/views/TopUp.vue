@@ -499,7 +499,7 @@ const confirmPaymentAndTopUp = async () => {
         transactionSuccess.value = true
         
         if (data.transaction?.status === 'processing') {
-          showToast('Payment verified! MooGold is sending your diamonds...', 'info')
+          showToast('Payment verified! Sending your diamonds...', 'info')
           startStatusPolling(data.transaction._id)
         } else {
           showToast('Payment Verified! Top-Up Successful.', 'success')
@@ -514,6 +514,22 @@ const confirmPaymentAndTopUp = async () => {
     isVerifyingPayment.value = false
     khqrModalOpen.value = false
   }
+}
+
+const formatErrorDetails = (details) => {
+  if (!details) return 'Delivery could not be completed at this time.'
+  let str = details.toString()
+  str = str.replace(/moogold\s*callback:\s*/gi, '')
+  str = str.replace(/moogold:\s*/gi, '')
+  str = str.replace(/moogold\s*/gi, '')
+  str = str.replace(/rapidapi\s*/gi, '')
+  if (str.toLowerCase().includes('refunded')) {
+    return 'Delivery could not be completed (Refunded)'
+  }
+  if (str.toLowerCase().includes('incorrect-details') || str.toLowerCase().includes('invalid player')) {
+    return 'Incorrect Player ID or Zone ID'
+  }
+  return str.trim() || 'Delivery could not be completed at this time.'
 }
 
 const startStatusPolling = (txId) => {
@@ -531,7 +547,7 @@ const startStatusPolling = (txId) => {
           showToast('Diamonds Delivered! Top-Up Completed!', 'success')
         } else if (data.transaction.status === 'failed') {
           clearInterval(statusPollingInterval)
-          showToast(data.transaction.errorDetails || 'MooGold delivery failed.', 'error')
+          showToast(formatErrorDetails(data.transaction.errorDetails), 'error')
         }
       }
     } catch (e) {
@@ -786,15 +802,15 @@ const resetCheckout = () => {
               <p class="text-gray-300 mb-6 font-medium">Diamonds have been delivered successfully to your game account!</p>
             </div>
             <div v-else-if="currentTransaction?.deliveryStatus === 'failed' || currentTransaction?.status === 'failed'">
-              <p class="text-rose-400 mb-2 font-medium">{{ currentTransaction?.errorDetails || 'MooGold was unable to deliver diamonds.' }}</p>
-              <p class="text-xs text-gray-400 mb-6 max-w-md mx-auto">Your payment was confirmed. Please contact support with MooGold Order #{{ currentTransaction?.providerReference || currentTransaction?._id }} for a manual re-delivery or refund.</p>
+              <p class="text-rose-400 mb-2 font-medium">{{ formatErrorDetails(currentTransaction?.errorDetails) }}</p>
+              <p class="text-xs text-gray-400 mb-6 max-w-md mx-auto">Your payment was confirmed. Please contact support with Order #{{ currentTransaction?.providerReference || currentTransaction?._id }} for manual delivery or refund.</p>
             </div>
             <div v-else class="space-y-2 mb-6">
               <p class="text-amber-300 font-semibold text-sm">
-                MooGold is currently sending diamonds to <span class="text-white font-mono">{{ playerId }} ({{ zoneId }})</span>.
+                Sending diamonds to <span class="text-white font-mono">{{ playerId }} ({{ zoneId }})</span>.
               </p>
               <p class="text-gray-400 text-xs">
-                MooGold Order #{{ currentTransaction?.providerReference || 'Pending' }}. Status updates automatically once delivered by game server.
+                Order #{{ currentTransaction?.providerReference || 'Pending' }}. Status updates automatically once delivered by game server.
               </p>
             </div>
 

@@ -71,7 +71,7 @@ const syncProcessingOrders = async () => {
                         changed = true;
                     } else if (info.status === 'failed' && tx.deliveryStatus !== 'failed') {
                         tx.deliveryStatus = 'failed';
-                        tx.errorDetails = `MooGold: ${info.order_status || 'delivery failed'}`;
+                        tx.errorDetails = info.order_status === 'refunded' ? 'Delivery refunded' : `Delivery ${info.order_status || 'failed'}`;
                         changed = true;
                     } else if (info.status === 'processing' && tx.deliveryStatus !== 'sending') {
                         tx.deliveryStatus = 'sending';
