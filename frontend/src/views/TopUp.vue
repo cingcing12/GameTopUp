@@ -40,7 +40,7 @@ const needsZoneId = computed(() => {
 const loadGamePackages = async (dbGame) => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const targetId = dbGame.moogoldId || dbGame._id;
-  const res = await fetch(`${apiUrl}/api/moogold/products/${targetId}`);
+  const res = await fetch(`${apiUrl}/api/catalog/products/${targetId}`);
   const data = await res.json();
   
   if (res.ok && data?.Variation) {
@@ -199,7 +199,7 @@ const checkPlayerId = async () => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
-    const validateRes = await fetch(`${apiUrl}/api/moogold/validate`, {
+    const validateRes = await fetch(`${apiUrl}/api/catalog/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -270,7 +270,7 @@ const handleCheckout = async () => {
     // 2. Safe Provider Availability Check: Check stock without exposing provider wallet balance
     try {
       const requiredPrice = parseFloat(selectedPackage.value.price || 0);
-      const availRes = await fetch(`${apiUrl}/api/moogold/check-availability?price=${encodeURIComponent(requiredPrice)}`);
+      const availRes = await fetch(`${apiUrl}/api/catalog/check-availability?price=${encodeURIComponent(requiredPrice)}`);
       if (availRes.ok) {
         const availData = await availRes.json();
         if (!availData.available) {

@@ -33,6 +33,7 @@ updatesRouter.get('/stream', (req, res) => {
 app.use('/api/games', gameRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/moogold', moogoldRoutes);
+app.use('/api/catalog', moogoldRoutes);
 app.use('/api/bakong', bakongRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
