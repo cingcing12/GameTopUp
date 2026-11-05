@@ -937,7 +937,8 @@ const searchedTransactions = computed(() => {
     t.status?.toLowerCase().includes(query) ||
     t.paymentStatus?.toLowerCase().includes(query) ||
     t.deliveryStatus?.toLowerCase().includes(query) ||
-    t.providerReference?.toLowerCase().includes(query)
+    t.providerReference?.toLowerCase().includes(query) ||
+    t._id?.toLowerCase().includes(query)
   )
 })
 
@@ -1363,7 +1364,12 @@ const formatDate = (dateString) => {
                     {{ formatDate(tx.createdAt) }}
                   </td>
                   <td class="px-6 py-4">
-                    <div class="font-bold text-white mb-1">{{ tx.gameId?.name || 'Unknown Game' }}</div>
+                    <div class="font-bold text-white mb-1 flex items-center gap-2">
+                      <span>{{ tx.gameId?.name || 'Unknown Game' }}</span>
+                      <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-400/10 text-amber-300 border border-amber-400/20 font-semibold">
+                        Order #{{ tx.providerReference || (tx._id ? tx._id.slice(-8).toUpperCase() : 'N/A') }}
+                      </span>
+                    </div>
                     <div class="text-sm font-semibold text-gray-300">ID: {{ tx.playerId }}</div>
                     <div class="text-xs text-gray-500 mt-0.5" v-if="tx.serverId">Zone: {{ tx.serverId }}</div>
                   </td>
@@ -1387,7 +1393,7 @@ const formatDate = (dateString) => {
                         {{ getDeliveryLabel(tx) }}
                       </span>
                       <span v-if="tx.providerReference" class="text-[11px] text-gray-400 font-mono">
-                        MooGold #{{ tx.providerReference }}
+                        Ref #{{ tx.providerReference }}
                       </span>
                       <span v-if="tx.errorDetails && (tx.deliveryStatus === 'failed' || tx.status === 'failed')" class="text-[11px] text-rose-400 font-medium max-w-xs truncate" :title="tx.errorDetails">
                         {{ tx.errorDetails }}
@@ -2108,7 +2114,7 @@ const formatDate = (dateString) => {
             <span class="text-primary font-bold">{{ editingTx.amount }} 💎 (${{ Number(editingTx.price).toFixed(2) }})</span>
           </div>
           <div class="flex justify-between items-center text-sm" v-if="editingTx.providerReference">
-            <span class="text-gray-400">MooGold Order:</span>
+            <span class="text-gray-400">Order Reference:</span>
             <span class="text-amber-400 font-mono text-xs">#{{ editingTx.providerReference }}</span>
           </div>
         </div>

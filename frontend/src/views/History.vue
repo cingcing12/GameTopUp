@@ -1,10 +1,25 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { Copy, Check } from 'lucide-vue-next'
 import { useAuth } from '../composables/useAuth'
 
 const { user, token } = useAuth()
 const transactions = ref([])
 const loading = ref(true)
+const copiedId = ref(null)
+
+const copyOrderId = async (id) => {
+  if (!id) return
+  try {
+    await navigator.clipboard.writeText(id)
+    copiedId.value = id
+    setTimeout(() => {
+      if (copiedId.value === id) copiedId.value = null
+    }, 2000)
+  } catch (err) {
+    console.error('Failed to copy', err)
+  }
+}
 
 const fetchTransactions = async () => {
   if (!user.value || !token.value) {
@@ -150,7 +165,23 @@ const getDeliveryLabel = (tx) => {
               🎮
             </div>
             <div>
-              <h3 class="font-bold text-white text-lg">{{ tx.gameId?.name || 'Unknown Game' }}</h3>
+              <div class="flex flex-wrap items-center gap-2.5 mb-1">
+                <h3 class="font-bold text-white text-lg">{{ tx.gameId?.name || 'Unknown Game' }}</h3>
+                <span 
+                  class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-amber-400/10 text-amber-300 border border-amber-400/25 text-xs font-mono font-semibold"
+                  :title="'Order ID: ' + (tx.providerReference || tx._id)"
+                >
+                  <span>Order #{{ tx.providerReference || (tx._id ? tx._id.slice(-8).toUpperCase() : 'N/A') }}</span>
+                  <button 
+                    @click.stop="copyOrderId(tx.providerReference || tx._id)" 
+                    class="text-gray-400 hover:text-amber-300 transition-colors p-0.5 rounded hover:bg-white/10" 
+                    :title="copiedId === (tx.providerReference || tx._id) ? 'Copied!' : 'Copy Order ID'"
+                  >
+                    <Check v-if="copiedId === (tx.providerReference || tx._id)" class="w-3.5 h-3.5 text-emerald-400" />
+                    <Copy v-else class="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              </div>
               <p class="text-sm text-gray-300 font-semibold mb-0.5">ID: {{ tx.playerId }} <span v-if="tx.serverId">({{ tx.serverId }})</span></p>
               <p class="text-xs text-gray-500">{{ formatDate(tx.createdAt) }}</p>
               <p v-if="(tx.deliveryStatus === 'failed' || tx.status === 'failed') && tx.errorDetails" class="text-xs text-rose-400 mt-1 flex items-center gap-1 font-medium">
