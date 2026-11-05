@@ -9,10 +9,10 @@ const { authMiddleware, requireAuth } = require('../middleware/auth');
 // In-Memory IP Rate Limiter to stop bots & probing attacks
 const transactionRateMap = new Map();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 6;
+const MAX_REQUESTS_PER_WINDOW = 15; // Generous for real players (even sharing Wi-Fi), blocks automated spam bots
 
 const transactionRateLimiter = (req, res, next) => {
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+  const ip = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
   const now = Date.now();
   const timestamps = transactionRateMap.get(ip) || [];
   const recent = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
