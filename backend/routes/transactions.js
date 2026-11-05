@@ -6,26 +6,8 @@ const { createMoogoldTransaction } = require('./moogold');
 const { verifyBakongPayment } = require('./bakong');
 const { authMiddleware, requireAuth } = require('../middleware/auth');
 
-// In-Memory IP Rate Limiter to stop bots & probing attacks
-const transactionRateMap = new Map();
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 15; // Generous for real players (even sharing Wi-Fi), blocks automated spam bots
-
-const transactionRateLimiter = (req, res, next) => {
-  const ip = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
-  const now = Date.now();
-  const timestamps = transactionRateMap.get(ip) || [];
-  const recent = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
-  if (recent.length >= MAX_REQUESTS_PER_WINDOW) {
-    return res.status(429).json({ message: 'Too many requests. Please wait a minute before trying again.' });
-  }
-  recent.push(now);
-  transactionRateMap.set(ip, recent);
-  next();
-};
-
 // Create a new transaction (top-up) [SECURED AGAINST FRAUD, PROBES & REPLAY ATTACKS]
-router.post('/', transactionRateLimiter, authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   const { gameId, playerId, serverId, amount, price, paymentMethod, productId, md5 } = req.body;
 
   try {
