@@ -162,6 +162,7 @@ const isProcessing = ref(false)
 const transactionSuccess = ref(false)
 const transactionError = ref('')
 const currentTransaction = ref(null)
+const agreeTerms = ref(true)
 let statusPollingInterval = null
 const khqrModalOpen = ref(false)
 const khqrData = ref(null)
@@ -250,6 +251,10 @@ const handleCheckout = async () => {
   }
   if (!selectedPayment.value) {
     transactionError.value = 'Please select a payment method'
+    return
+  }
+  if (!agreeTerms.value) {
+    transactionError.value = 'Please agree to the Terms & Conditions to proceed'
     return
   }
   
@@ -846,6 +851,27 @@ const resetCheckout = () => {
             </div>
           </div>
 
+          <!-- Terms & Conditions Agreement -->
+          <div class="mb-4 flex items-start gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/10 transition-colors hover:border-white/20 select-none">
+            <input 
+              type="checkbox" 
+              id="agreeTerms" 
+              v-model="agreeTerms"
+              class="mt-0.5 w-4 h-4 rounded border-white/20 bg-darker text-primary focus:ring-0 focus:ring-offset-0 accent-primary cursor-pointer transition-all"
+            />
+            <label for="agreeTerms" class="text-xs text-gray-300 leading-tight cursor-pointer">
+              I agree to the 
+              <router-link 
+                to="/page/terms-of-service" 
+                target="_blank" 
+                class="text-primary hover:text-yellow-300 underline font-semibold transition-colors"
+                @click.stop
+              >
+                Terms & Conditions
+              </router-link>
+            </label>
+          </div>
+
           <!-- Error Message -->
           <div v-if="transactionError" class="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-2">
             <svg class="w-4 h-4 text-red-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -856,9 +882,9 @@ const resetCheckout = () => {
 
           <button 
             @click="handleCheckout"
-            :disabled="isProcessing"
+            :disabled="isProcessing || !agreeTerms"
             class="w-full py-3 text-sm font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden"
-            :class="isProcessing ? 'bg-white/10 text-gray-400 cursor-not-allowed' : 'bg-primary text-darker hover:bg-yellow-400 shadow-lg hover:shadow-primary/30 active:scale-[0.98]'"
+            :class="isProcessing || !agreeTerms ? 'bg-white/10 text-gray-500 cursor-not-allowed opacity-60' : 'bg-primary text-darker hover:bg-yellow-400 shadow-lg hover:shadow-primary/30 active:scale-[0.98]'"
           >
             <span>{{ isProcessing ? 'Processing...' : 'Pay Now' }}</span>
           </button>
