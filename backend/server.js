@@ -22,6 +22,7 @@ const profileRoutes = require('./routes/profile');
 const sliderRoutes = require('./routes/sliders');
 const userRoutes = require('./routes/users');
 const pageRoutes = require('./routes/pages');
+const settingsRoutes = require('./routes/settings');
 const updatesRouter = express.Router();
 const { addClient } = require('./sse');
 
@@ -41,6 +42,7 @@ app.use('/api/sliders', sliderRoutes);
 app.use('/api/updates', updatesRouter);
 app.use('/api/users', userRoutes);
 app.use('/api/pages', pageRoutes);
+app.use('/api/settings', settingsRoutes);
 
 app.get('/', (req, res) => {
     res.status(200).send("Server is running...");

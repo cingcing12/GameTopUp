@@ -140,6 +140,7 @@ const handleAdminLogin = async () => {
       fetchTransactions()
       fetchUsers()
       fetchPages()
+      fetchSettings()
     } else {
       loginError.value = data.message || 'Invalid admin credentials or Master PIN'
     }
@@ -474,6 +475,55 @@ const savePage = async () => {
     showToast(error.message || 'Error saving page', 'error')
   } finally {
     isSavingPage.value = false
+  }
+}
+
+// Site Settings Management
+const siteSettings = ref({
+  telegramUsername: 'pheak_topup',
+  telegramEnabled: true
+})
+const isSavingSettings = ref(false)
+const isLoadingSettings = ref(false)
+
+const fetchSettings = async () => {
+  isLoadingSettings.value = true
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await authFetch(`${apiUrl}/api/settings`)
+    if (res.ok) {
+      const data = await res.json()
+      siteSettings.value = {
+        telegramUsername: data.telegramUsername || '',
+        telegramEnabled: data.telegramEnabled !== false
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load settings:', err)
+  } finally {
+    isLoadingSettings.value = false
+  }
+}
+
+const saveSettings = async () => {
+  isSavingSettings.value = true
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await authFetch(`${apiUrl}/api/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(siteSettings.value)
+    })
+    const data = await res.json()
+    if (res.ok) {
+      showToast('Settings saved successfully!', 'success')
+    } else {
+      throw new Error(data.message || 'Failed to save settings')
+    }
+  } catch (err) {
+    showToast(err.message || 'Error saving settings', 'error')
+  } finally {
+    isSavingSettings.value = false
   }
 }
 
@@ -921,6 +971,7 @@ onMounted(async () => {
     fetchUsers()
     fetchPages()
     fetchMoogoldBalance()
+    fetchSettings()
   }
 })
 
@@ -1237,10 +1288,11 @@ const formatDate = (dateString) => {
         </button>
         <button 
           @click="activeTab = 'settings'"
-          class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5"
+          class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-semibold"
+          :class="activeTab === 'settings' ? 'bg-primary text-darker shadow-lg shadow-primary/20' : 'text-gray-400 hover:text-white hover:bg-white/5'"
         >
           <Settings class="w-4 h-4" />
-          Settings (Coming Soon)
+          Site Settings
         </button>
       </nav>
 
@@ -1752,6 +1804,137 @@ const formatDate = (dateString) => {
                 <button @click="openEditPage(slug)" class="p-2.5 rounded-xl bg-white/5 text-gray-300 hover:bg-primary hover:text-darker hover:shadow-lg hover:shadow-primary/20 transition-all group-hover:scale-110" title="Edit Page Content">
                   <Edit class="w-4 h-4" />
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings Management Section -->
+        <div v-if="activeTab === 'settings'" class="animate-fade-in">
+          <div class="glass-card p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl relative overflow-hidden">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+              <div>
+                <h2 class="text-2xl font-black font-outfit text-white flex items-center gap-3">
+                  <Settings class="w-8 h-8 text-primary" />
+                  Site Settings & Contact Channels
+                </h2>
+                <p class="text-xs text-gray-400 mt-1">Manage Telegram support button and live customer communication channels</p>
+              </div>
+
+              <button 
+                @click="saveSettings" 
+                :disabled="isSavingSettings"
+                class="px-6 py-3 bg-primary text-darker font-bold rounded-xl hover:bg-yellow-400 transition-all text-sm flex items-center gap-2 shadow-lg hover:shadow-primary/20 active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw v-if="isSavingSettings" class="w-4 h-4 animate-spin" />
+                <CheckCircle2 v-else class="w-4 h-4" />
+                <span>{{ isSavingSettings ? 'Saving...' : 'Save Changes' }}</span>
+              </button>
+            </div>
+
+            <!-- Settings Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <!-- Telegram Support Card -->
+              <div class="bg-[#12121a]/80 p-6 md:p-7 rounded-2xl border border-white/5 space-y-6">
+                <div class="flex items-center justify-between pb-4 border-b border-white/5">
+                  <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#229ED9] to-[#2BAAE2] flex items-center justify-center text-white shadow-lg shadow-[#229ED9]/20">
+                      <svg class="w-6 h-6 fill-current -translate-x-0.5 translate-y-0.5" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 class="text-white font-bold text-base">Telegram Customer Support</h3>
+                      <p class="text-xs text-gray-400">Floating contact button on bottom-right of website</p>
+                    </div>
+                  </div>
+
+                  <!-- Toggle Enable/Disable -->
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" v-model="siteSettings.telegramEnabled" class="sr-only peer">
+                    <div class="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#229ED9]"></div>
+                  </label>
+                </div>
+
+                <!-- Telegram Username Input -->
+                <div class="space-y-2">
+                  <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider block">
+                    Telegram Username
+                  </label>
+                  <div class="relative flex items-center">
+                    <span class="absolute left-4 text-gray-500 font-bold text-sm">@</span>
+                    <input 
+                      type="text" 
+                      v-model="siteSettings.telegramUsername" 
+                      placeholder="username (e.g. pheak_topup)"
+                      class="w-full pl-9 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 text-sm focus:outline-none focus:border-[#229ED9] transition-colors"
+                    />
+                  </div>
+                  <p class="text-[11px] text-gray-500">
+                    Customers who click the floating button will open a direct chat with this Telegram username.
+                  </p>
+                </div>
+
+                <!-- Preview Link Box -->
+                <div class="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block">Direct Chat Link:</span>
+                    <a 
+                      :href="`https://t.me/${(siteSettings.telegramUsername || '').replace(/^@/, '').trim()}`" 
+                      target="_blank" 
+                      class="text-xs font-mono text-[#2BAAE2] hover:underline flex items-center gap-1.5 mt-0.5"
+                    >
+                      <span>https://t.me/{{ (siteSettings.telegramUsername || '').replace(/^@/, '').trim() || 'your_username' }}</span>
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  </div>
+
+                  <a 
+                    :href="`https://t.me/${(siteSettings.telegramUsername || '').replace(/^@/, '').trim()}`" 
+                    target="_blank" 
+                    class="px-4 py-2 bg-[#229ED9]/10 text-[#2BAAE2] hover:bg-[#229ED9]/20 font-semibold rounded-lg text-xs transition-colors self-start sm:self-center"
+                  >
+                    Test Open Link
+                  </a>
+                </div>
+              </div>
+
+              <!-- Information / Helper Card -->
+              <div class="bg-[#12121a]/80 p-6 md:p-7 rounded-2xl border border-white/5 flex flex-col justify-between">
+                <div>
+                  <h3 class="text-white font-bold text-base mb-3 flex items-center gap-2">
+                    <CheckCircle2 class="w-5 h-5 text-emerald-400" />
+                    How the Telegram Support Button Works
+                  </h3>
+                  <ul class="space-y-3 text-xs text-gray-400 leading-relaxed">
+                    <li class="flex items-start gap-2">
+                      <span class="text-primary font-bold">•</span>
+                      <span>The floating button appears on the <strong>bottom-right corner</strong> of all store pages.</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <span class="text-primary font-bold">•</span>
+                      <span>When a customer needs help with an order, payment, or top-up, they click the button and immediately start chatting with you on Telegram.</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <span class="text-primary font-bold">•</span>
+                      <span>You can change your Telegram username anytime right here, and the website updates in real-time.</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="pt-6 border-t border-white/5 mt-6">
+                  <button 
+                    @click="saveSettings" 
+                    :disabled="isSavingSettings"
+                    class="w-full py-3 bg-primary text-darker font-bold rounded-xl hover:bg-yellow-400 transition-all text-sm flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/20 active:scale-95 disabled:opacity-50"
+                  >
+                    <RefreshCw v-if="isSavingSettings" class="w-4 h-4 animate-spin" />
+                    <CheckCircle2 v-else class="w-4 h-4" />
+                    <span>{{ isSavingSettings ? 'Saving...' : 'Save Settings Now' }}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

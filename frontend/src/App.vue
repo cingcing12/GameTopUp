@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
+import TelegramButton from './components/TelegramButton.vue'
 
 const route = useRoute()
 
@@ -30,5 +31,8 @@ const showLayout = computed(() => {
     </main>
 
     <Footer v-if="showLayout" class="z-10" />
+
+    <!-- Floating Telegram Contact Support Button -->
+    <TelegramButton v-if="showLayout" />
   </div>
 </template>
