@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { CheckCircle2, AlertCircle, RefreshCw } from 'lucide-vue-next'
+import { CheckCircle2, AlertCircle, RefreshCw, Download } from 'lucide-vue-next'
 import { useAuth } from '../composables/useAuth'
 
 const route = useRoute()
@@ -468,6 +468,97 @@ onUnmounted(() => {
   stopCountdown()
 })
 
+const isDownloadingQR = ref(false)
+
+const downloadQRCode = () => {
+  if (!khqrData.value?.qrImage) {
+    showToast('QR Code not ready yet', 'error')
+    return
+  }
+
+  isDownloadingQR.value = true
+  try {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        const size = 600
+        canvas.width = size
+        canvas.height = size
+        const ctx = canvas.getContext('2d')
+
+        // 1. White background
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, size, size)
+
+        // 2. Draw QR code
+        ctx.drawImage(img, 20, 20, size - 40, size - 40)
+
+        // 3. Draw center logo overlay with gold border
+        const logo = new Image()
+        logo.crossOrigin = 'anonymous'
+        logo.onload = () => {
+          try {
+            const logoSize = 110
+            const logoX = (size - logoSize) / 2
+            const logoY = (size - logoSize) / 2
+
+            // White rounded box around logo
+            ctx.fillStyle = '#FFFFFF'
+            ctx.strokeStyle = '#FFD700'
+            ctx.lineWidth = 4
+            ctx.beginPath()
+            if (ctx.roundRect) {
+              ctx.roundRect(logoX - 6, logoY - 6, logoSize + 12, logoSize + 12, 16)
+            } else {
+              ctx.rect(logoX - 6, logoY - 6, logoSize + 12, logoSize + 12)
+            }
+            ctx.fill()
+            ctx.stroke()
+
+            // Draw logo image
+            ctx.drawImage(logo, logoX, logoY, logoSize, logoSize)
+
+            saveDataUrl(canvas.toDataURL('image/png'))
+          } catch (e) {
+            saveDataUrl(canvas.toDataURL('image/png'))
+          }
+        }
+        logo.onerror = () => {
+          saveDataUrl(canvas.toDataURL('image/png'))
+        }
+        logo.src = '/logo.jpg'
+      } catch (err) {
+        saveDataUrl(khqrData.value.qrImage)
+      }
+    }
+    img.onerror = () => {
+      saveDataUrl(khqrData.value.qrImage)
+    }
+    img.src = khqrData.value.qrImage
+  } catch (err) {
+    saveDataUrl(khqrData.value.qrImage)
+  }
+}
+
+const saveDataUrl = (dataUrl) => {
+  try {
+    const filename = `KHQR_${(validatedName.value || 'TopUp').replace(/[^a-zA-Z0-9]/g, '')}_${selectedPackage.value?.price ? selectedPackage.value.price.toFixed(2) : 'order'}.png`
+    const link = document.createElement('a')
+    link.href = dataUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    showToast('QR Code saved to downloads!', 'success')
+  } catch (err) {
+    console.error('Failed to trigger download:', err)
+  } finally {
+    isDownloadingQR.value = false
+  }
+}
+
 const confirmPaymentAndTopUp = async () => {
   isVerifyingPayment.value = true
   transactionError.value = ''
@@ -918,6 +1009,18 @@ const resetCheckout = () => {
 
             <div class="absolute inset-0 border-4 border-dashed border-primary/50 rounded-xl pointer-events-none group-hover:border-primary transition-colors"></div>
           </div>
+
+          <!-- Download QR Code Button -->
+          <button 
+            @click="downloadQRCode"
+            :disabled="isDownloadingQR || !khqrData?.qrImage"
+            type="button"
+            class="w-full mb-6 py-3 px-4 bg-primary/10 hover:bg-primary/20 active:scale-95 text-primary border border-primary/30 hover:border-primary/60 font-bold rounded-xl transition-all text-sm flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none"
+          >
+            <RefreshCw v-if="isDownloadingQR" class="w-4 h-4 animate-spin" />
+            <Download v-else class="w-4 h-4" />
+            <span>{{ isDownloadingQR ? 'Saving QR...' : 'Download QR Code' }}</span>
+          </button>
           
           <div class="flex flex-col items-center mb-8 w-full px-4">
             <!-- Show the validated game username -->
