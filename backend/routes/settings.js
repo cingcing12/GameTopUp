@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Setting = require('../models/Setting');
 const { requireAdmin } = require('../middleware/auth');
+const { sendEvent } = require('../sse');
 
 const DEFAULT_SETTINGS = {
   telegramUsername: 'pheak_topup',
@@ -40,6 +41,9 @@ router.put('/', requireAdmin, async (req, res) => {
       updatedSettings[key] = setting.value;
     }
 
+    // Broadcast real-time update to all connected frontend clients via SSE
+    sendEvent('settings_updated', updatedSettings);
+
     res.json({ message: 'Settings updated successfully', settings: updatedSettings });
   } catch (error) {
     console.error('Error saving settings:', error);
@@ -48,3 +52,4 @@ router.put('/', requireAdmin, async (req, res) => {
 });
 
 module.exports = router;
+

@@ -1,9 +1,10 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const telegramUsername = ref('pheak_topup')
 const telegramEnabled = ref(true)
 const isHovered = ref(false)
+let eventSource = null
 
 const cleanUsername = computed(() => {
   if (!telegramUsername.value) return 'pheak_topup'
@@ -35,13 +36,41 @@ const fetchSettings = async () => {
 
 onMounted(() => {
   fetchSettings()
+
+  // Real-time SSE Connection for instant updates without page refresh
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    eventSource = new EventSource(`${apiUrl}/api/updates/stream`)
+
+    eventSource.addEventListener('settings_updated', (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.telegramUsername !== undefined) {
+          telegramUsername.value = data.telegramUsername
+        }
+        if (data.telegramEnabled !== undefined) {
+          telegramEnabled.value = data.telegramEnabled
+        }
+      } catch (err) {
+        console.error('Error handling SSE settings_updated:', err)
+      }
+    })
+  } catch (err) {
+    console.debug('SSE connection error:', err)
+  }
+})
+
+onUnmounted(() => {
+  if (eventSource) {
+    eventSource.close()
+  }
 })
 </script>
 
 <template>
   <div 
     v-if="telegramEnabled && cleanUsername" 
-    class="fixed bottom-6 right-6 z-50 flex items-center group select-none"
+    class="fixed bottom-6 right-6 z-50 flex items-center group select-none animate-fade-in"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
   >
