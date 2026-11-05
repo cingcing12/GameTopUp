@@ -6,8 +6,26 @@ const { createMoogoldTransaction } = require('./moogold');
 const { verifyBakongPayment } = require('./bakong');
 const { authMiddleware, requireAuth } = require('../middleware/auth');
 
-// Create a new transaction (top-up) [SECURED AGAINST FRAUD & REPLAY ATTACKS]
-router.post('/', authMiddleware, async (req, res) => {
+// In-Memory IP Rate Limiter to stop bots & probing attacks
+const transactionRateMap = new Map();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 6;
+
+const transactionRateLimiter = (req, res, next) => {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const timestamps = transactionRateMap.get(ip) || [];
+  const recent = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= MAX_REQUESTS_PER_WINDOW) {
+    return res.status(429).json({ message: 'Too many requests. Please wait a minute before trying again.' });
+  }
+  recent.push(now);
+  transactionRateMap.set(ip, recent);
+  next();
+};
+
+// Create a new transaction (top-up) [SECURED AGAINST FRAUD, PROBES & REPLAY ATTACKS]
+router.post('/', transactionRateLimiter, authMiddleware, async (req, res) => {
   const { gameId, playerId, serverId, amount, price, paymentMethod, productId, md5 } = req.body;
 
   try {
@@ -25,11 +43,21 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Valid Player ID is required' });
     }
 
-    // 2. Strict Payment Verification (Stop fake checkout exploits)
-    const isKhqr = paymentMethod === 'khqr' || paymentMethod === 'bakong';
+    // 2. Strict Payment Verification (Stop fake checkout exploits & unauthorized payment methods)
+    const normalizedPaymentMethod = (paymentMethod || '').toString().toLowerCase().trim();
+    const isKhqr = normalizedPaymentMethod === 'khqr' || normalizedPaymentMethod === 'bakong';
     const isAdmin = req.user && req.user.role === 'admin';
 
-    if (isKhqr && !isAdmin) {
+    // Disallow arbitrary payment methods like 'cash', 'probe', etc. for public checkout
+    if (!isAdmin && !isKhqr) {
+      return res.status(400).json({ 
+        message: 'Invalid or unsupported payment method. Only verified Bakong KHQR payments are accepted.' 
+      });
+    }
+
+    let verifiedPaymentHash = undefined;
+
+    if (!isAdmin) {
       if (!md5 || typeof md5 !== 'string' || md5.trim().length < 16) {
         return res.status(400).json({ message: 'Payment verification token (MD5) is required' });
       }
@@ -48,6 +76,8 @@ router.post('/', authMiddleware, async (req, res) => {
       if (!isPaid) {
         return res.status(400).json({ message: 'Payment verification failed with Bakong' });
       }
+
+      verifiedPaymentHash = cleanMd5;
       console.log(`[Bakong Verified] MD5: ${cleanMd5}, source: ${verification?.source || 'gateway'}`);
     }
 
@@ -67,6 +97,12 @@ router.post('/', authMiddleware, async (req, res) => {
       }
     }
 
+    // 4. Absolute Pre-requisite for Supplier Fulfillment: MUST be confirmed paid
+    const isConfirmedPaid = isAdmin || !!verifiedPaymentHash;
+    if (!isConfirmedPaid) {
+      return res.status(400).json({ message: 'Payment verification is required before order fulfillment' });
+    }
+
     const newTransaction = new Transaction({
       userId: req.user ? req.user.id : undefined,
       gameId,
@@ -74,9 +110,9 @@ router.post('/', authMiddleware, async (req, res) => {
       serverId: cleanServerId,
       amount: parsedAmount,
       price: parsedPrice,
-      paymentMethod,
-      paymentReference: (isKhqr && md5) ? md5.trim() : undefined,
-      paymentStatus: (isKhqr || isAdmin) ? 'paid' : 'unpaid',
+      paymentMethod: normalizedPaymentMethod || 'khqr',
+      paymentReference: verifiedPaymentHash,
+      paymentStatus: 'paid',
       deliveryStatus: 'pending',
       status: 'pending'
     });
