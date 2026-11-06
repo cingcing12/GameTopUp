@@ -59,4 +59,21 @@ const router = createRouter({
   }
 })
 
+// Automatically recover when user navigates during/after a new deployment
+router.onError((error) => {
+  const isChunkError =
+    error.message?.includes('Failed to fetch dynamically imported module') ||
+    error.message?.includes('Importing a module script failed') ||
+    error.message?.includes('text/html')
+
+  if (isChunkError && !sessionStorage.getItem('chunk_reload')) {
+    sessionStorage.setItem('chunk_reload', 'true')
+    window.location.reload()
+  }
+})
+
+router.afterEach(() => {
+  sessionStorage.removeItem('chunk_reload')
+})
+
 export default router

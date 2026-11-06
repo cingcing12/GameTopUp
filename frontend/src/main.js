@@ -4,6 +4,12 @@ import App from './App.vue'
 import router from './router'
 import vue3GoogleLogin from 'vue3-google-login'
 
+// Auto-reload when a new deployment invalidates old cached Vite chunks
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault()
+  window.location.reload()
+})
+
 const app = createApp(App)
 
 app.use(router)
