@@ -138,15 +138,23 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// Update custom prices (Admin only)
+// Update custom prices & featured packages (Admin only)
 router.put('/:id/prices', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { customPrices } = req.body;
+    const { customPrices, featuredPackages } = req.body;
     
+    const updateData = {};
+    if (customPrices !== undefined) {
+      updateData.customPrices = customPrices;
+    }
+    if (featuredPackages !== undefined) {
+      updateData.featuredPackages = featuredPackages;
+    }
+
     const updatedGame = await Game.findByIdAndUpdate(
       id, 
-      { $set: { customPrices } }, 
+      { $set: updateData }, 
       { returnDocument: 'after' }
     );
     

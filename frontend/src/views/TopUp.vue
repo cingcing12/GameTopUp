@@ -45,9 +45,13 @@ const loadGamePackages = async (dbGame) => {
   
   if (res.ok && data?.Variation) {
     const activeList = data.Variation.filter(item => item.stock_status === 'instock');
-    const sortedList = (activeList.length > 0 ? activeList : data.Variation).sort((a, b) => (parseFloat(a.variation_price) || 0) - (parseFloat(b.variation_price) || 0));
+    const rawList = activeList.length > 0 ? activeList : data.Variation;
     
-    packages.value = sortedList.map(item => {
+    const featuredList = Array.isArray(dbGame?.featuredPackages) 
+      ? dbGame.featuredPackages.map(String) 
+      : [];
+    
+    packages.value = rawList.map(item => {
       let cleanName = item.variation_name || '';
       if (cleanName.includes(' - ')) {
         cleanName = cleanName.substring(cleanName.indexOf(' - ') + 3);
@@ -69,6 +73,8 @@ const loadGamePackages = async (dbGame) => {
         bonusText = parenMatch[1].trim();
         displayName = displayName.replace(/\(.*?\)/, '').trim();
       }
+
+      const isItemFeatured = featuredList.includes(item.variation_id.toString()) || Boolean(item.is_featured);
       
       return {
         id: item.variation_id.toString(),
@@ -81,8 +87,16 @@ const loadGamePackages = async (dbGame) => {
         price: unitPrice,
         original_price: origPrice,
         icon: '💎',
-        stock_status: item.stock_status || 'instock'
+        stock_status: item.stock_status || 'instock',
+        isFeatured: isItemFeatured
       };
+    });
+
+    // Sort: Featured packages appear FIRST at the top, then sorted by price!
+    packages.value.sort((a, b) => {
+      if (a.isFeatured && !b.isFeatured) return -1;
+      if (!a.isFeatured && b.isFeatured) return 1;
+      return a.price - b.price;
     });
   } else {
     packages.value = [];
@@ -874,30 +888,35 @@ const resetCheckout = () => {
               :class="[
                 pkg.stock_status === 'outofstock' 
                   ? 'bg-black/30 border border-white/5 cursor-not-allowed opacity-50' 
-                  : 'bg-[#151722]/80 hover:bg-[#1b1e2c] border cursor-pointer',
-                selectedPackage?.id === pkg.id 
-                  ? 'border-primary bg-primary/[0.08] shadow-[0_0_20px_rgba(255,215,0,0.12)] ring-1 ring-primary/80 -translate-y-0.5' 
-                  : 'border-white/10 hover:border-white/20'
+                  : (selectedPackage?.id === pkg.id 
+                      ? 'border-primary bg-primary/[0.08] shadow-[0_0_20px_rgba(255,215,0,0.12)] ring-1 ring-primary/80 -translate-y-0.5 cursor-pointer' 
+                      : (pkg.isFeatured
+                          ? 'bg-[#151722]/90 hover:bg-[#1b1e2c] border-amber-500/40 hover:border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.06)] cursor-pointer'
+                          : 'bg-[#151722]/80 hover:bg-[#1b1e2c] border-white/10 hover:border-white/20 cursor-pointer'))
               ]"
               :disabled="pkg.stock_status === 'outofstock'"
             >
               <!-- Selected Checkmark Badge (Top Right) -->
-              <div v-if="selectedPackage?.id === pkg.id" class="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-primary text-darker flex items-center justify-center shadow-md">
+              <div v-if="selectedPackage?.id === pkg.id" class="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-primary text-darker flex items-center justify-center shadow-md z-10">
                 <svg class="w-3 h-3 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               </div>
 
-              <!-- Top Left Badge: Bonus or Out of Stock -->
+              <!-- Top Left Badge: Featured, Bonus, or Sold Out -->
               <div v-if="pkg.stock_status === 'outofstock'" class="absolute -top-px -left-px bg-gray-700 text-gray-300 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-tl-xl rounded-br-lg">
                 Sold Out
+              </div>
+              <div v-else-if="pkg.isFeatured" class="absolute -top-px -left-px bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-darker text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-tl-xl rounded-br-lg shadow-sm flex items-center gap-1 z-10">
+                <span>⭐</span> FEATURED
+                <span v-if="pkg.bonusText" class="opacity-80 font-bold ml-0.5">· {{ pkg.bonusText }}</span>
               </div>
               <div v-else-if="pkg.bonusText" class="absolute -top-px -left-px bg-gradient-to-r from-amber-500 to-yellow-500 text-darker text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-tl-xl rounded-br-lg shadow-sm">
                 {{ pkg.bonusText }}
               </div>
 
               <!-- Main Package Info -->
-              <div :class="pkg.bonusText || pkg.stock_status === 'outofstock' ? 'mt-2.5' : ''">
+              <div :class="pkg.isFeatured || pkg.bonusText || pkg.stock_status === 'outofstock' ? 'mt-2.5' : ''">
                 <div class="flex items-start gap-2 mb-1.5">
                   <div class="w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5">
                     <img v-if="gameInfo.customImages?.[pkg.id]" :src="gameInfo.customImages[pkg.id]" class="w-full h-full object-contain rounded-md" />

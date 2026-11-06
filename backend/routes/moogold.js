@@ -391,6 +391,11 @@ router.get('/products/:game_id', async (req, res) => {
                         variation.variation_price = parseFloat(custom);
                     }
                 }
+
+                if (dbGame && Array.isArray(dbGame.featuredPackages)) {
+                    variation.is_featured = dbGame.featuredPackages.includes(variation.variation_id.toString());
+                }
+
                 return variation;
             });
             return res.json({ success: true, ...copy });

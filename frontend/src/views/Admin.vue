@@ -6,7 +6,7 @@ import {
   Activity, DollarSign, Users, Package, LayoutDashboard, 
   Settings, LogOut, ShieldAlert, ChevronRight, Gamepad2, UploadCloud, Image as ImageIcon,
   AlertCircle, LayoutTemplate, Plus, Edit, Trash2, Eye, EyeOff, Lock, Unlock, ListOrdered, FileText,
-  Wallet
+  Wallet, Star
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -566,6 +566,8 @@ const openPricingModal = async (game) => {
       const activeList = data.Variation.filter(p => p.stock_status === 'instock')
       const sortedList = (activeList.length > 0 ? activeList : data.Variation).sort((a, b) => (parseFloat(a.variation_price) || 0) - (parseFloat(b.variation_price) || 0))
 
+      const featuredList = Array.isArray(game.featuredPackages) ? game.featuredPackages.map(String) : []
+
       gamePackages.value = sortedList.map(p => {
         let cleanName = p.variation_name || ''
         if (cleanName.includes(' - ')) {
@@ -583,7 +585,8 @@ const openPricingModal = async (game) => {
           name: cleanName.trim(),
           originalPrice: origPrice,
           customPrice: customP !== undefined ? parseFloat(customP) : unitPrice,
-          customImage: game.customImages && game.customImages[p.variation_id.toString()] ? game.customImages[p.variation_id.toString()] : null
+          customImage: game.customImages && game.customImages[p.variation_id.toString()] ? game.customImages[p.variation_id.toString()] : null,
+          isFeatured: featuredList.includes(p.variation_id.toString())
         }
       })
     }
@@ -600,19 +603,34 @@ const savePrices = async () => {
   
   try {
     const customPrices = {}
+    const featuredPackages = []
+
     gamePackages.value.forEach(p => {
       customPrices[p.id] = p.customPrice
+      if (p.isFeatured) {
+        featuredPackages.push(p.id)
+      }
     })
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     const res = await authFetch(`${apiUrl}/api/games/${selectedGameForPricing.value._id}/prices`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customPrices })
+      body: JSON.stringify({ customPrices, featuredPackages })
     })
     
     if (res.ok) {
-      showToast('Prices updated successfully', 'success')
+      if (selectedGameForPricing.value) {
+        selectedGameForPricing.value.customPrices = customPrices
+        selectedGameForPricing.value.featuredPackages = featuredPackages
+      }
+      const gIndex = games.value.findIndex(g => g._id === selectedGameForPricing.value._id)
+      if (gIndex !== -1) {
+        games.value[gIndex].customPrices = customPrices
+        games.value[gIndex].featuredPackages = featuredPackages
+      }
+
+      showToast('Prices & Featured packages updated successfully', 'success')
       showPricingModal.value = false
     } else {
       const data = await res.json()
@@ -1972,6 +1990,10 @@ const formatDate = (dateString) => {
           
           <!-- Bulk Markup Quick Actions -->
           <div class="flex items-center gap-1.5 flex-wrap">
+            <span v-if="gamePackages.some(p => p.isFeatured)" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 mr-1 shadow-sm">
+              <Star class="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              {{ gamePackages.filter(p => p.isFeatured).length }} Featured
+            </span>
             <span class="text-[11px] text-gray-400 font-semibold mr-1">Quick Profit:</span>
             <button @click="applyBulkMargin(5)" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-white/5 hover:bg-white/10 text-white border border-white/10 transition-all">+5%</button>
             <button @click="applyBulkMargin(10)" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-all">+10%</button>
@@ -1986,7 +2008,16 @@ const formatDate = (dateString) => {
         </div>
         
         <div v-else class="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
-          <div v-for="pkg in gamePackages" :key="pkg.id" class="bg-white/5 border border-white/10 hover:border-white/20 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all">
+          <div 
+            v-for="pkg in gamePackages" 
+            :key="pkg.id" 
+            class="rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all"
+            :class="[
+              pkg.isFeatured 
+                ? 'bg-amber-500/[0.06] border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.08)]' 
+                : 'bg-white/5 border border-white/10 hover:border-white/20'
+            ]"
+          >
             <!-- Left: Icon & Name -->
             <div class="font-bold text-white text-sm md:w-5/12 flex items-center gap-3">
               <div class="relative w-11 h-11 shrink-0 bg-black/50 border border-white/10 rounded-xl overflow-hidden group">
@@ -2007,17 +2038,39 @@ const formatDate = (dateString) => {
                 />
               </div>
               <div class="truncate">
-                <p class="text-white font-semibold text-sm leading-tight truncate">{{ pkg.name }}</p>
+                <div class="flex items-center gap-2">
+                  <p class="text-white font-semibold text-sm leading-tight truncate">{{ pkg.name }}</p>
+                  <span v-if="pkg.isFeatured" class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                    Featured
+                  </span>
+                </div>
                 <p class="text-[11px] text-gray-500 mt-0.5 font-mono">SKU: <span class="text-gray-400">{{ pkg.id }}</span></p>
               </div>
             </div>
             
-            <!-- Right: Cost in IDR, Cost in USD, Sell For, and Profit badge -->
-            <div class="flex items-center justify-between md:justify-end gap-4 sm:gap-6 w-full md:w-7/12 flex-wrap sm:flex-nowrap">
+            <!-- Right: Cost in USD, Featured Toggle, Sell For, and Profit badge -->
+            <div class="flex items-center justify-between md:justify-end gap-3 sm:gap-6 w-full md:w-7/12 flex-wrap sm:flex-nowrap">
               <!-- MooGold Cost (USD) -->
               <div class="flex flex-col text-left md:text-right shrink-0">
                 <span class="text-gray-500 text-[10px] uppercase font-bold tracking-wider">MooGold Cost</span>
                 <span class="text-gray-200 font-extrabold text-sm">${{ pkg.originalPrice.toFixed(2) }}</span>
+              </div>
+
+              <!-- Featured Toggle Button -->
+              <div class="flex flex-col items-center shrink-0">
+                <span class="text-gray-500 text-[10px] uppercase font-bold tracking-wider mb-1">Badge</span>
+                <button 
+                  type="button"
+                  @click="pkg.isFeatured = !pkg.isFeatured"
+                  class="px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer select-none"
+                  :class="pkg.isFeatured 
+                    ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/40' 
+                    : 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10 hover:border-white/20'"
+                  :title="pkg.isFeatured ? 'Featured: shown at top on frontend' : 'Click to feature at top on frontend'"
+                >
+                  <Star class="w-3.5 h-3.5" :class="pkg.isFeatured ? 'fill-amber-400 text-amber-400' : 'text-gray-400'" />
+                  <span>{{ pkg.isFeatured ? 'Featured' : 'Feature' }}</span>
+                </button>
               </div>
               
               <!-- Sell Price Input + Profit Badge -->

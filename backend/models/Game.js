@@ -18,6 +18,10 @@ const gameSchema = new mongoose.Schema({
     of: Number,
     default: {}
   },
+  featuredPackages: {
+    type: [String],
+    default: []
+  },
   customImages: {
     type: Map,
     of: String,
