@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { CheckCircle2, AlertCircle, RefreshCw, Download, Clock, Sparkles, Star } from 'lucide-vue-next'
+import { CheckCircle2, AlertCircle, RefreshCw, Download, Clock, Sparkles, Star, Gift } from 'lucide-vue-next'
 import { useAuth } from '../composables/useAuth'
 
 const route = useRoute()
@@ -924,11 +924,7 @@ const resetCheckout = () => {
                     {{ pkg.displayName || pkg.name }}
                     <div v-if="pkg.bonusText" class="mt-1.5">
                       <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/[0.08] text-amber-400 border border-amber-500/35 shadow-sm select-none leading-none">
-                        <svg class="w-3 h-3 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M11 2C11 6.97 7.03 11 2 11C7.03 11 11 15.03 11 20C11 15.03 14.97 11 20 11C14.97 11 11 6.97 11 2Z" />
-                          <path d="M19 2V6M17 4H21" />
-                          <circle cx="4" cy="19" r="1.2" fill="currentColor" stroke="none" />
-                        </svg>
+                        <Gift class="w-3 h-3 text-amber-400 shrink-0" />
                         <span>{{ pkg.bonusText }}</span>
                       </span>
                     </div>
