@@ -799,7 +799,7 @@ const resetCheckout = () => {
       <div class="lg:col-span-2 space-y-8">
         
         <!-- Step 1: Account Info -->
-        <div class="glass-card p-6 relative overflow-hidden group border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
+        <div class="glass-card p-6 relative overflow-hidden border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
           <h2 class="text-lg font-semibold text-white mb-5 flex items-center gap-3">
             <span class="bg-primary/20 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">1</span>
             Account Details
@@ -870,7 +870,7 @@ const resetCheckout = () => {
         </div>
 
         <!-- Step 2: Select Package -->
-        <div class="glass-card p-6 relative overflow-hidden group border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
+        <div class="glass-card p-6 relative overflow-hidden border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
           <h2 class="text-lg font-semibold text-white mb-5 flex items-center gap-3">
             <span class="bg-primary/20 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">2</span>
             Select Top-Up
@@ -884,7 +884,7 @@ const resetCheckout = () => {
               v-for="pkg in packages" 
               :key="pkg.id"
               @click="pkg.stock_status !== 'outofstock' && (selectedPackage = pkg)"
-              class="relative rounded-2xl p-3.5 sm:p-4 text-left transition-all duration-200 overflow-hidden flex flex-col justify-between group select-none min-h-[105px]"
+              class="relative rounded-2xl p-3.5 sm:p-4 text-left transition-all duration-200 overflow-hidden flex flex-col justify-between group/pkg select-none min-h-[105px]"
               :class="[
                 pkg.stock_status === 'outofstock' 
                   ? 'bg-black/30 border border-white/5 cursor-not-allowed opacity-50' 
@@ -920,7 +920,10 @@ const resetCheckout = () => {
                     <img v-else-if="gameInfo.currencyImage && gameInfo.currencyImage.startsWith('http')" :src="gameInfo.currencyImage" class="w-3.5 h-3.5 object-contain" />
                     <span v-else class="text-xs leading-none">{{ gameInfo.currencyImage || pkg.icon || '💎' }}</span>
                   </div>
-                  <div class="font-bold text-white text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors flex-1 break-words">
+                  <div 
+                    class="font-bold text-xs sm:text-sm leading-snug transition-colors flex-1 break-words"
+                    :class="selectedPackage?.id === pkg.id ? 'text-primary' : 'text-white group-hover/pkg:text-primary'"
+                  >
                     {{ pkg.displayName || pkg.name }}
                     <div v-if="pkg.bonusText" class="mt-1.5">
                       <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/[0.08] text-amber-400 border border-amber-500/35 shadow-sm select-none leading-none">
@@ -934,7 +937,10 @@ const resetCheckout = () => {
 
               <!-- Minimal Clean Price -->
               <div class="mt-auto pt-2 flex items-baseline justify-between">
-                <span class="text-base font-extrabold text-white group-hover:text-primary transition-colors tracking-tight">
+                <span 
+                  class="text-base font-extrabold transition-colors tracking-tight"
+                  :class="selectedPackage?.id === pkg.id ? 'text-primary' : 'text-white group-hover/pkg:text-primary'"
+                >
                   ${{ pkg.price.toFixed(2) }}
                 </span>
                 <span v-if="pkg.original_price && pkg.original_price > pkg.price" class="text-xs text-gray-500 line-through">
@@ -958,7 +964,7 @@ const resetCheckout = () => {
       <div class="space-y-8 lg:sticky lg:top-28 self-start">
         
         <!-- Step 3: Payment Method -->
-        <div class="glass-card p-6 relative overflow-hidden group border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
+        <div class="glass-card p-6 relative overflow-hidden border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
           <h2 class="text-lg font-semibold text-white mb-5 flex items-center gap-3">
             <span class="bg-primary/20 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">3</span>
             Payment
