@@ -884,7 +884,7 @@ const resetCheckout = () => {
               v-for="pkg in packages" 
               :key="pkg.id"
               @click="pkg.stock_status !== 'outofstock' && (selectedPackage = pkg)"
-              class="relative rounded-2xl p-3.5 sm:p-4 text-left transition-all duration-200 overflow-hidden flex flex-col justify-between group select-none min-h-[96px]"
+              class="relative rounded-2xl p-3.5 sm:p-4 text-left transition-all duration-200 overflow-hidden flex flex-col justify-between group select-none min-h-[105px]"
               :class="[
                 pkg.stock_status === 'outofstock' 
                   ? 'bg-black/30 border border-white/5 cursor-not-allowed opacity-50' 
@@ -903,20 +903,16 @@ const resetCheckout = () => {
                 </svg>
               </div>
 
-              <!-- Top Left Badge: Featured, Bonus, or Sold Out -->
-              <div v-if="pkg.stock_status === 'outofstock'" class="absolute -top-px -left-px bg-gray-700 text-gray-300 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-tl-xl rounded-br-lg">
+              <!-- Top Left Badge: Featured or Sold Out -->
+              <div v-if="pkg.stock_status === 'outofstock'" class="absolute -top-px -left-px bg-gray-700 text-gray-300 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-tl-xl rounded-br-lg select-none z-10">
                 Sold Out
               </div>
-              <div v-else-if="pkg.isFeatured" class="absolute -top-px -left-px bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-darker text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-tl-xl rounded-br-lg shadow-sm flex items-center gap-1 z-10">
+              <div v-else-if="pkg.isFeatured" class="absolute -top-px -left-px bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-darker text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-tl-xl rounded-br-lg shadow-sm flex items-center gap-1 z-10 leading-normal select-none">
                 <span>⭐</span> FEATURED
-                <span v-if="pkg.bonusText" class="opacity-80 font-bold ml-0.5">· {{ pkg.bonusText }}</span>
-              </div>
-              <div v-else-if="pkg.bonusText" class="absolute -top-px -left-px bg-gradient-to-r from-amber-500 to-yellow-500 text-darker text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-tl-xl rounded-br-lg shadow-sm">
-                {{ pkg.bonusText }}
               </div>
 
               <!-- Main Package Info -->
-              <div :class="pkg.isFeatured || pkg.bonusText || pkg.stock_status === 'outofstock' ? 'mt-2.5' : ''">
+              <div :class="pkg.isFeatured || pkg.stock_status === 'outofstock' ? 'mt-4 sm:mt-4.5' : ''">
                 <div class="flex items-start gap-2 mb-1.5">
                   <div class="w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5">
                     <img v-if="gameInfo.customImages?.[pkg.id]" :src="gameInfo.customImages[pkg.id]" class="w-full h-full object-contain rounded-md" />
@@ -925,6 +921,11 @@ const resetCheckout = () => {
                   </div>
                   <div class="font-bold text-white text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors flex-1 break-words">
                     {{ pkg.displayName || pkg.name }}
+                    <div v-if="pkg.bonusText" class="mt-1">
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20 leading-none">
+                        <span class="text-[8px]">✨</span> {{ pkg.bonusText }}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
