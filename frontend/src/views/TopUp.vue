@@ -790,14 +790,14 @@ const resetCheckout = () => {
               </div>
 
               <!-- Main Package Info -->
-              <div :class="pkg.bonusText || pkg.stock_status === 'outofstock' ? 'mt-2' : ''">
-                <div class="flex items-center gap-2.5 mb-1 pr-6">
-                  <div class="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+              <div :class="pkg.bonusText || pkg.stock_status === 'outofstock' ? 'mt-2.5' : ''">
+                <div class="flex items-start gap-2 mb-1.5">
+                  <div class="w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5">
                     <img v-if="gameInfo.customImages?.[pkg.id]" :src="gameInfo.customImages[pkg.id]" class="w-full h-full object-contain rounded-md" />
-                    <img v-else-if="gameInfo.currencyImage && gameInfo.currencyImage.startsWith('http')" :src="gameInfo.currencyImage" class="w-4 h-4 object-contain" />
-                    <span v-else class="text-sm leading-none">{{ gameInfo.currencyImage || pkg.icon || '💎' }}</span>
+                    <img v-else-if="gameInfo.currencyImage && gameInfo.currencyImage.startsWith('http')" :src="gameInfo.currencyImage" class="w-3.5 h-3.5 object-contain" />
+                    <span v-else class="text-xs leading-none">{{ gameInfo.currencyImage || pkg.icon || '💎' }}</span>
                   </div>
-                  <div class="font-bold text-white text-sm leading-snug group-hover:text-primary transition-colors line-clamp-1">
+                  <div class="font-bold text-white text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors flex-1 break-words">
                     {{ pkg.displayName || pkg.name }}
                   </div>
                 </div>
