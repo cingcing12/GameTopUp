@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { CheckCircle2, AlertCircle, RefreshCw, Download, Clock, Sparkles, Star, Gift } from 'lucide-vue-next'
 import { useAuth } from '../composables/useAuth'
@@ -247,14 +247,25 @@ const saveRecentAccount = () => {
 }
 
 const selectRecentAccount = (acc) => {
-  playerId.value = acc.playerId
-  if (acc.zoneId) {
-    zoneId.value = acc.zoneId
-  }
+  if (debounceTimer) clearTimeout(debounceTimer)
+  
+  playerId.value = String(acc.playerId || '').trim()
+  zoneId.value = String(acc.zoneId || '').trim()
+  
+  // Show temporary cached name while live check verifies
   if (acc.username) {
     validatedName.value = acc.username
     idCheckError.value = ''
+  } else {
+    validatedName.value = ''
+    idCheckError.value = ''
   }
+
+  // Always re-check live game server to fetch newly changed in-game name immediately
+  nextTick(() => {
+    if (debounceTimer) clearTimeout(debounceTimer)
+    checkPlayerId()
+  })
 }
 
 const removeRecentAccount = (index) => {
@@ -270,11 +281,13 @@ const isCheckingId = ref(false)
 const idCheckError = ref('')
 
 const checkPlayerId = async () => {
-  if (!playerId.value) return;
+  const pId = String(playerId.value || '').trim()
+  const zId = String(zoneId.value || '').trim()
+  if (!pId) return;
+  if (needsZoneId.value && !zId) return;
   
   isCheckingId.value = true
   idCheckError.value = ''
-  validatedName.value = ''
   
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
@@ -285,8 +298,8 @@ const checkPlayerId = async () => {
       body: JSON.stringify({
         dbGameId: gameId.length === 24 ? gameId : null,
         gameId: gameId,
-        playerId: playerId.value,
-        zoneId: zoneId.value
+        playerId: pId,
+        zoneId: zId
       })
     })
     
@@ -295,15 +308,16 @@ const checkPlayerId = async () => {
     if (!validateRes.ok || validateData.err_code) {
       throw new Error(validateData.err_message || validateData.error || validateData.message || 'Invalid Player ID')
     } else {
-      validatedName.value = validateData.username || 'Valid Account'
+      const freshName = validateData.username || 'Valid Account'
+      validatedName.value = freshName
 
-      // Auto-update recent account name if the player changed their in-game name
+      // Auto-update recent account name in memory & localStorage if player changed their in-game name
       if (validateData.username) {
         const existingIdx = recentAccounts.value.findIndex(
-          acc => acc.playerId === playerId.value.trim() && (acc.zoneId || '') === (zoneId.value ? zoneId.value.trim() : '')
+          acc => String(acc.playerId || '').trim() === pId && String(acc.zoneId || '').trim() === zId
         )
         if (existingIdx !== -1) {
-          recentAccounts.value[existingIdx].username = validateData.username
+          recentAccounts.value[existingIdx].username = freshName
           try {
             localStorage.setItem(`gtu_recent_${gameId}`, JSON.stringify(recentAccounts.value))
           } catch (e) {}
@@ -826,12 +840,12 @@ const resetCheckout = () => {
                 :key="idx"
                 @click="selectRecentAccount(acc)"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all border group select-none"
-                :class="playerId === acc.playerId && (!needsZoneId || zoneId === acc.zoneId)
+                :class="String(playerId || '').trim() === String(acc.playerId || '').trim() && (!needsZoneId || String(zoneId || '').trim() === String(acc.zoneId || '').trim())
                   ? 'bg-primary/15 border-primary/50 text-primary shadow-sm ring-1 ring-primary/40'
                   : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/20 hover:text-white'"
                 :title="`Click to autofill ${acc.username || acc.playerId}`"
               >
-                <span class="w-1.5 h-1.5 rounded-full" :class="playerId === acc.playerId && (!needsZoneId || zoneId === acc.zoneId) ? 'bg-primary animate-pulse' : 'bg-gray-500'"></span>
+                <span class="w-1.5 h-1.5 rounded-full" :class="String(playerId || '').trim() === String(acc.playerId || '').trim() && (!needsZoneId || String(zoneId || '').trim() === String(acc.zoneId || '').trim()) ? 'bg-primary animate-pulse' : 'bg-gray-500'"></span>
                 <span class="font-semibold">{{ acc.username || acc.playerId }}</span>
                 <span v-if="acc.username" class="text-[10px] text-gray-400 font-mono">({{ acc.playerId }}{{ acc.zoneId ? ` / ${acc.zoneId}` : '' }})</span>
                 <span v-else-if="acc.zoneId" class="text-[10px] text-gray-400 font-mono">({{ acc.zoneId }})</span>
