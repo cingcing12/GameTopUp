@@ -884,7 +884,7 @@ const resetCheckout = () => {
               v-for="pkg in packages" 
               :key="pkg.id"
               @click="pkg.stock_status !== 'outofstock' && (selectedPackage = pkg)"
-              class="relative rounded-2xl p-3.5 sm:p-4 text-left transition-all duration-200 overflow-hidden flex flex-col justify-between group/pkg select-none min-h-[105px]"
+              class="relative rounded-2xl p-3 sm:p-3.5 text-left transition-all duration-200 overflow-hidden flex flex-col justify-between group/pkg select-none min-h-[110px] sm:min-h-[116px]"
               :class="[
                 pkg.stock_status === 'outofstock' 
                   ? 'bg-black/30 border border-white/5 cursor-not-allowed opacity-50' 
@@ -913,22 +913,40 @@ const resetCheckout = () => {
               </div>
 
               <!-- Main Package Info -->
-              <div :class="pkg.isFeatured || pkg.stock_status === 'outofstock' ? 'mt-4 sm:mt-4.5' : ''">
-                <div class="flex items-start gap-2 mb-1.5">
-                  <div class="w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <img v-if="gameInfo.customImages?.[pkg.id]" :src="gameInfo.customImages[pkg.id]" class="w-full h-full object-contain rounded-md" />
-                    <img v-else-if="gameInfo.currencyImage && gameInfo.currencyImage.startsWith('http')" :src="gameInfo.currencyImage" class="w-3.5 h-3.5 object-contain" />
-                    <span v-else class="text-xs leading-none">{{ gameInfo.currencyImage || pkg.icon || '💎' }}</span>
-                  </div>
+              <div :class="pkg.isFeatured || pkg.stock_status === 'outofstock' ? 'mt-4 sm:mt-4.5' : ''" class="flex-1">
+                <div class="flex items-center gap-2.5 mb-2">
+                  <!-- Custom Image (Large & Crisp) or Currency Glyph -->
                   <div 
-                    class="font-bold text-xs sm:text-sm leading-snug transition-colors flex-1 break-words"
-                    :class="selectedPackage?.id === pkg.id ? 'text-primary' : 'text-white group-hover/pkg:text-primary'"
+                    :class="gameInfo.customImages?.[pkg.id] 
+                      ? 'w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white/5 border border-white/10 p-1' 
+                      : 'w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/10 border border-primary/20'" 
+                    class="flex items-center justify-center shrink-0 shadow-sm transition-transform duration-300 group-hover/pkg:scale-105"
                   >
-                    {{ pkg.displayName || pkg.name }}
-                    <div v-if="pkg.bonusText" class="mt-1.5">
-                      <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/[0.08] text-amber-400 border border-amber-500/35 shadow-sm select-none leading-none">
-                        <Gift class="w-3 h-3 text-amber-400 shrink-0" />
-                        <span>{{ pkg.bonusText }}</span>
+                    <img 
+                      v-if="gameInfo.customImages?.[pkg.id]" 
+                      :src="gameInfo.customImages[pkg.id]" 
+                      class="w-full h-full object-contain filter drop-shadow" 
+                    />
+                    <img 
+                      v-else-if="gameInfo.currencyImage && gameInfo.currencyImage.startsWith('http')" 
+                      :src="gameInfo.currencyImage" 
+                      class="w-4 h-4 sm:w-4.5 sm:h-4.5 object-contain" 
+                    />
+                    <span v-else class="text-sm leading-none">{{ gameInfo.currencyImage || pkg.icon || '💎' }}</span>
+                  </div>
+
+                  <!-- Text Block (clean, no messy wrapping) -->
+                  <div class="flex-1 min-w-0">
+                    <div 
+                      class="font-black text-xs sm:text-sm leading-tight transition-colors line-clamp-2"
+                      :class="selectedPackage?.id === pkg.id ? 'text-primary' : 'text-white group-hover/pkg:text-primary'"
+                    >
+                      {{ pkg.displayName || pkg.name }}
+                    </div>
+                    <div v-if="pkg.bonusText" class="mt-1">
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-amber-500/[0.1] text-amber-400 border border-amber-500/30 shadow-sm select-none leading-none">
+                        <Gift class="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                        <span class="truncate">{{ pkg.bonusText }}</span>
                       </span>
                     </div>
                   </div>
@@ -936,14 +954,14 @@ const resetCheckout = () => {
               </div>
 
               <!-- Minimal Clean Price -->
-              <div class="mt-auto pt-2 flex items-baseline justify-between">
+              <div class="mt-auto pt-2 flex items-baseline justify-between border-t border-white/[0.04]">
                 <span 
-                  class="text-base font-extrabold transition-colors tracking-tight"
+                  class="text-base sm:text-lg font-black transition-colors tracking-tight"
                   :class="selectedPackage?.id === pkg.id ? 'text-primary' : 'text-white group-hover/pkg:text-primary'"
                 >
                   ${{ pkg.price.toFixed(2) }}
                 </span>
-                <span v-if="pkg.original_price && pkg.original_price > pkg.price" class="text-xs text-gray-500 line-through">
+                <span v-if="pkg.original_price && pkg.original_price > pkg.price" class="text-xs text-gray-500 line-through font-semibold">
                   ${{ pkg.original_price.toFixed(2) }}
                 </span>
               </div>
