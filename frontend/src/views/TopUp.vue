@@ -119,9 +119,6 @@ onMounted(async () => {
     setTimeout(() => { isLoading.value = false }, 600) // Artificial delay for skeleton
     selectedPayment.value = payments[0] // Auto-select KHQR
     loadRecentAccounts()
-    if (!playerId.value && recentAccounts.value.length > 0) {
-      selectRecentAccount(recentAccounts.value[0])
-    }
   }
   
   // Real-time SSE updates
