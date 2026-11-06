@@ -5,7 +5,7 @@ const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 const { sendEvent } = require('../sse');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, authMiddleware } = require('../middleware/auth');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -32,12 +32,29 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get single game by ID
-router.get('/:id', async (req, res) => {
+// Get single game by ID (Sanitized for public users)
+router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const game = await Game.findById(req.params.id);
     if (!game) return res.status(404).json({ message: 'Game not found' });
-    res.json(game);
+    
+    // Authenticated admin gets full document
+    if (req.user && req.user.role === 'admin') {
+      return res.json(game);
+    }
+
+    // Public users get only public storefront info - no supplier moogoldId, rapidApiId or internal cost maps
+    res.json({
+      _id: game._id,
+      name: game.name,
+      publisher: game.publisher,
+      image: game.image,
+      banner: game.banner,
+      currencyImage: game.currencyImage,
+      customImages: game.customImages || {},
+      featuredPackages: game.featuredPackages || [],
+      isActive: game.isActive
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

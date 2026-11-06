@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const Game = require('../models/Game');
-const { requireAdmin, requireAuth } = require('../middleware/auth');
+const { requireAdmin, requireAuth, authMiddleware } = require('../middleware/auth');
 
 const BASE_URL = 'https://moogold.com/wp-json/v1/api';
 
@@ -333,7 +333,7 @@ const productCache = {};
 const PRODUCT_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 // GET /api/moogold/products/:game_id - Get packages/variations for a game [SANITIZED & CACHED]
-router.get('/products/:game_id', async (req, res) => {
+router.get('/products/:game_id', authMiddleware, async (req, res) => {
     try {
         const gameIdParam = sanitizeInput(req.params.game_id, 32);
         if (!gameIdParam) {
@@ -374,13 +374,12 @@ router.get('/products/:game_id', async (req, res) => {
             };
         }
 
-        // Apply custom prices if configured in MongoDB
+        // Apply custom prices and strictly sanitize public response
         if (data && Array.isArray(data.Variation)) {
-            const copy = JSON.parse(JSON.stringify(data));
-            copy.Variation = copy.Variation.map(variation => {
+            const isAdmin = req.user && req.user.role === 'admin';
+            const cleanVariations = data.Variation.map(variation => {
                 const basePrice = parseFloat(variation.variation_price || 0);
-                variation.original_price = basePrice;
-                variation.price_usd = basePrice;
+                let sellPrice = basePrice;
 
                 if (dbGame && dbGame.customPrices) {
                     const custom = dbGame.customPrices.get 
@@ -388,17 +387,39 @@ router.get('/products/:game_id', async (req, res) => {
                         : dbGame.customPrices[variation.variation_id.toString()];
 
                     if (custom !== undefined && custom !== null && !isNaN(custom)) {
-                        variation.variation_price = parseFloat(custom);
+                        sellPrice = parseFloat(custom);
                     }
                 }
 
-                if (dbGame && Array.isArray(dbGame.featuredPackages)) {
-                    variation.is_featured = dbGame.featuredPackages.includes(variation.variation_id.toString());
+                const isFeatured = (dbGame && Array.isArray(dbGame.featuredPackages))
+                    ? dbGame.featuredPackages.includes(variation.variation_id.toString())
+                    : false;
+
+                // Strip supplier SKU (#...) from variation name for clean public presentation
+                const cleanName = (variation.variation_name || '').replace(/\s*\(#\d+\)\s*$/, '').trim();
+
+                const item = {
+                    variation_id: variation.variation_id,
+                    variation_name: cleanName,
+                    variation_price: sellPrice,
+                    stock_status: variation.stock_status || 'instock',
+                    is_featured: isFeatured
+                };
+
+                // Wholesale cost and supplier fields are strictly hidden from public visitors
+                // and only visible to authorized Admins (e.g. inside Admin Price Manager)
+                if (isAdmin) {
+                    item.original_price = basePrice;
+                    item.price_usd = basePrice;
                 }
 
-                return variation;
+                return item;
             });
-            return res.json({ success: true, ...copy });
+
+            return res.json({
+                success: true,
+                Variation: cleanVariations
+            });
         }
 
         res.json({ success: true, ...data });

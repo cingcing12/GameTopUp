@@ -560,7 +560,7 @@ const openPricingModal = async (game) => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
     const targetId = game.moogoldId || game._id
-    const res = await fetch(`${apiUrl}/api/moogold/products/${targetId}`)
+    const res = await authFetch(`${apiUrl}/api/moogold/products/${targetId}`)
     const data = await res.json()
     
     if (res.ok && data?.Variation) {

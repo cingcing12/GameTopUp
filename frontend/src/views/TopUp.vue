@@ -39,7 +39,7 @@ const needsZoneId = computed(() => {
 
 const loadGamePackages = async (dbGame) => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  const targetId = dbGame.moogoldId || dbGame._id;
+  const targetId = dbGame._id; // Use internal MongoDB game ID, never expose MooGold ID
   const res = await fetch(`${apiUrl}/api/catalog/products/${targetId}`);
   const data = await res.json();
   
@@ -119,7 +119,6 @@ onMounted(async () => {
       gameInfo.value.currencyImage = dbGame.currencyImage || '💎';
       gameInfo.value.customImages = dbGame.customImages || {};
       gameInfo.value.provider = 'moogold';
-      gameInfo.value.moogoldId = dbGame.moogoldId;
       
       // Load packages
       await loadGamePackages(dbGame);
