@@ -1,12 +1,12 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   CheckCircle2, XCircle, Clock, Search, RefreshCw, 
   Activity, DollarSign, Users, Package, LayoutDashboard, 
   Settings, LogOut, ShieldAlert, ChevronRight, Gamepad2, UploadCloud, Image as ImageIcon,
   AlertCircle, LayoutTemplate, Plus, Edit, Trash2, Eye, EyeOff, Lock, Unlock, ListOrdered, FileText,
-  Wallet, Star
+  Wallet, Star, Crop, ZoomIn, ZoomOut, RotateCcw, Move
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -766,12 +766,233 @@ const toggleGameStatus = async (game) => {
   }
 }
 
+// Banner Cropper State
+const showBannerCropModal = ref(false)
+const bannerCropGame = ref(null)
+const bannerCropImageSrc = ref('')
+const bannerCropNaturalWidth = ref(0)
+const bannerCropNaturalHeight = ref(0)
+const bannerZoom = ref(1) // 1x to 3x
+const bannerPanX = ref(0)
+const bannerPanY = ref(0)
+const isCroppingBanner = ref(false)
+const cropViewportRef = ref(null)
+
+const isDraggingBanner = ref(false)
+const dragStartBanner = { x: 0, y: 0 }
+const panStartBanner = { x: 0, y: 0 }
+
+const clampBannerPan = (panX, panY, zoom) => {
+  if (!cropViewportRef.value || !bannerCropNaturalWidth.value || !bannerCropNaturalHeight.value) {
+    return { x: panX, y: panY }
+  }
+  const boxW = cropViewportRef.value.clientWidth || 800
+  const boxH = cropViewportRef.value.clientHeight || 200
+  const imgW = bannerCropNaturalWidth.value
+  const imgH = bannerCropNaturalHeight.value
+
+  const baseScale = Math.max(boxW / imgW, boxH / imgH)
+  const currentScale = baseScale * zoom
+  const renderW = imgW * currentScale
+  const renderH = imgH * currentScale
+
+  const maxPanX = Math.max(0, (renderW - boxW) / 2)
+  const maxPanY = Math.max(0, (renderH - boxH) / 2)
+
+  return {
+    x: Math.min(maxPanX, Math.max(-maxPanX, panX)),
+    y: Math.min(maxPanY, Math.max(-maxPanY, panY))
+  }
+}
+
+watch(bannerZoom, (newZoom) => {
+  const clamped = clampBannerPan(bannerPanX.value, bannerPanY.value, newZoom)
+  bannerPanX.value = clamped.x
+  bannerPanY.value = clamped.y
+})
+
+const onBannerPanStart = (e) => {
+  isDraggingBanner.value = true
+  dragStartBanner.x = e.clientX
+  dragStartBanner.y = e.clientY
+  panStartBanner.x = bannerPanX.value
+  panStartBanner.y = bannerPanY.value
+}
+
+const onBannerPanMove = (e) => {
+  if (!isDraggingBanner.value) return
+  const dx = e.clientX - dragStartBanner.x
+  const dy = e.clientY - dragStartBanner.y
+  const clamped = clampBannerPan(panStartBanner.x + dx, panStartBanner.y + dy, bannerZoom.value)
+  bannerPanX.value = clamped.x
+  bannerPanY.value = clamped.y
+}
+
+const onBannerPanEnd = () => {
+  isDraggingBanner.value = false
+}
+
+const onBannerTouchStart = (e) => {
+  if (e.touches && e.touches.length === 1) {
+    isDraggingBanner.value = true
+    dragStartBanner.x = e.touches[0].clientX
+    dragStartBanner.y = e.touches[0].clientY
+    panStartBanner.x = bannerPanX.value
+    panStartBanner.y = bannerPanY.value
+  }
+}
+
+const onBannerTouchMove = (e) => {
+  if (!isDraggingBanner.value || !e.touches || e.touches.length !== 1) return
+  const dx = e.touches[0].clientX - dragStartBanner.x
+  const dy = e.touches[0].clientY - dragStartBanner.y
+  const clamped = clampBannerPan(panStartBanner.x + dx, panStartBanner.y + dy, bannerZoom.value)
+  bannerPanX.value = clamped.x
+  bannerPanY.value = clamped.y
+}
+
+const onBannerTouchEnd = () => {
+  isDraggingBanner.value = false
+}
+
+const onBannerWheel = (e) => {
+  const delta = e.deltaY < 0 ? 0.08 : -0.08
+  bannerZoom.value = Math.min(3, Math.max(1, parseFloat((bannerZoom.value + delta).toFixed(2))))
+}
+
+const resetBannerCrop = () => {
+  bannerZoom.value = 1
+  bannerPanX.value = 0
+  bannerPanY.value = 0
+}
+
+const cropImageStyle = computed(() => {
+  if (!bannerCropNaturalWidth.value) return {}
+  const boxW = (cropViewportRef.value && cropViewportRef.value.clientWidth) || 800
+  const boxH = (cropViewportRef.value && cropViewportRef.value.clientHeight) || 200
+  const imgW = bannerCropNaturalWidth.value
+  const imgH = bannerCropNaturalHeight.value
+
+  const baseScale = Math.max(boxW / imgW, boxH / imgH)
+  const currentScale = baseScale * bannerZoom.value
+  const renderW = imgW * currentScale
+  const renderH = imgH * currentScale
+
+  const left = (boxW - renderW) / 2 + bannerPanX.value
+  const top = (boxH - renderH) / 2 + bannerPanY.value
+
+  return {
+    width: `${renderW}px`,
+    height: `${renderH}px`,
+    left: `${left}px`,
+    top: `${top}px`
+  }
+})
+
+const saveCroppedBanner = async () => {
+  if (!bannerCropGame.value || !bannerCropImageSrc.value) return
+  isCroppingBanner.value = true
+
+  try {
+    const canvas = document.createElement('canvas')
+    const targetWidth = 1600
+    const targetHeight = 400 // 4:1 aspect ratio
+    canvas.width = targetWidth
+    canvas.height = targetHeight
+    const ctx = canvas.getContext('2d')
+
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = bannerCropImageSrc.value
+    })
+
+    const box = cropViewportRef.value ? cropViewportRef.value.getBoundingClientRect() : { width: 800, height: 200 }
+    const boxW = box.width
+    const boxH = box.height
+    const imgW = img.naturalWidth
+    const imgH = img.naturalHeight
+
+    const baseScale = Math.max(boxW / imgW, boxH / imgH)
+    const currentScale = baseScale * bannerZoom.value
+
+    const cropW = boxW / currentScale
+    const cropH = boxH / currentScale
+    const cropCenterX = imgW / 2 - (bannerPanX.value / currentScale)
+    const cropCenterY = imgH / 2 - (bannerPanY.value / currentScale)
+
+    const srcX = Math.max(0, Math.min(imgW - cropW, cropCenterX - cropW / 2))
+    const srcY = Math.max(0, Math.min(imgH - cropH, cropCenterY - cropH / 2))
+
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(img, srcX, srcY, cropW, cropH, 0, 0, targetWidth, targetHeight)
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+    const croppedFile = new File([blob], `banner_${bannerCropGame.value._id}.jpg`, { type: 'image/jpeg' })
+
+    const formData = new FormData()
+    formData.append('banner', croppedFile)
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await authFetch(`${apiUrl}/api/games/${bannerCropGame.value._id}`, {
+      method: 'PUT',
+      body: formData
+    })
+
+    const updatedGame = await res.json()
+    if (res.ok) {
+      const idx = games.value.findIndex(g => g._id === bannerCropGame.value._id)
+      if (idx !== -1) {
+        games.value[idx] = updatedGame
+      }
+      showToast('Banner cropped and uploaded successfully!', 'success')
+      showBannerCropModal.value = false
+    } else {
+      throw new Error(updatedGame.message || 'Failed to upload cropped banner')
+    }
+  } catch (error) {
+    console.error("Error cropping banner", error)
+    showToast(error.message || 'Error uploading cropped banner', 'error')
+  } finally {
+    isCroppingBanner.value = false
+  }
+}
+
 const handleImageUpload = async (event, game, type = 'image') => {
   const file = event.target.files[0]
   if (!file) return
+
+  if (type === 'banner') {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        bannerCropGame.value = game
+        bannerCropImageSrc.value = e.target.result
+        bannerCropNaturalWidth.value = img.naturalWidth
+        bannerCropNaturalHeight.value = img.naturalHeight
+        bannerZoom.value = 1
+        bannerPanX.value = 0
+        bannerPanY.value = 0
+        showBannerCropModal.value = true
+        nextTick(() => {
+          if (cropViewportRef.value) {
+            bannerPanX.value = 0
+            bannerPanY.value = 0
+          }
+        })
+      }
+      img.src = e.target.result
+    }
+    reader.readAsDataURL(file)
+    event.target.value = ''
+    return
+  }
   
-  if (type === 'banner') isUploadingBanner.value[game._id] = true
-  else isUploading.value[game._id] = true
+  isUploading.value[game._id] = true
   
   try {
     const formData = new FormData()
@@ -2145,6 +2366,180 @@ const formatDate = (dateString) => {
           <button @click="savePage" :disabled="isSavingPage" class="flex-1 py-3.5 rounded-xl bg-primary text-darker font-bold hover:bg-primary/90 transition-all flex items-center justify-center gap-2" :class="{'opacity-50 cursor-not-allowed': isSavingPage}">
             <RefreshCw v-if="isSavingPage" class="w-5 h-5 animate-spin" />
             {{ isSavingPage ? 'Saving...' : 'Save Content' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Crop Banner Modal -->
+    <div v-if="showBannerCropModal" class="fixed inset-0 z-[160] flex items-center justify-center bg-darker/85 backdrop-blur-md animate-fade-in p-3 sm:p-6 overflow-y-auto">
+      <div class="glass-card p-5 sm:p-7 rounded-3xl border border-white/10 shadow-2xl w-full max-w-4xl relative my-auto">
+        <!-- Close Button -->
+        <button @click="showBannerCropModal = false" class="absolute top-5 right-5 text-gray-400 hover:text-white transition-colors">
+          <XCircle class="w-6 h-6" />
+        </button>
+
+        <!-- Header -->
+        <div class="flex items-center gap-3 mb-2">
+          <div class="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center shrink-0">
+            <Crop class="w-5 h-5" />
+          </div>
+          <div>
+            <h3 class="text-xl sm:text-2xl font-black font-outfit text-white">Crop Cover Banner</h3>
+            <p class="text-xs sm:text-sm text-gray-400">Position and frame the banner for <span class="text-primary font-bold">{{ bannerCropGame?.name }}</span></p>
+          </div>
+        </div>
+
+        <!-- Crop Viewport Window -->
+        <div class="mt-4">
+          <div class="flex items-center justify-between text-xs text-gray-400 mb-1.5 px-1">
+            <span class="flex items-center gap-1 font-semibold text-gray-300">
+              <Move class="w-3.5 h-3.5 text-primary" /> Drag image to position
+            </span>
+            <span class="text-[11px] font-mono text-gray-400">Aspect Ratio: 4:1 (Frontend Banner)</span>
+          </div>
+
+          <div 
+            ref="cropViewportRef"
+            class="relative w-full aspect-[4/1] overflow-hidden rounded-2xl bg-black border-2 border-primary/50 cursor-grab active:cursor-grabbing select-none shadow-[0_0_30px_rgba(0,0,0,0.8)] touch-none"
+            @mousedown="onBannerPanStart"
+            @mousemove="onBannerPanMove"
+            @mouseup="onBannerPanEnd"
+            @mouseleave="onBannerPanEnd"
+            @touchstart="onBannerTouchStart"
+            @touchmove="onBannerTouchMove"
+            @touchend="onBannerTouchEnd"
+            @wheel.prevent="onBannerWheel"
+          >
+            <!-- Image to be cropped -->
+            <img 
+              :src="bannerCropImageSrc"
+              class="absolute pointer-events-none select-none max-w-none transition-none"
+              :style="cropImageStyle"
+            />
+
+            <!-- Rule of Thirds Grid Overlay -->
+            <div class="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 opacity-25">
+              <div class="border-r border-b border-white"></div>
+              <div class="border-r border-b border-white"></div>
+              <div class="border-b border-white"></div>
+              <div class="border-r border-b border-white"></div>
+              <div class="border-r border-b border-white"></div>
+              <div class="border-b border-white"></div>
+              <div class="border-r border-b border-white"></div>
+              <div class="border-r border-b border-white"></div>
+              <div></div>
+            </div>
+
+            <!-- Hint pill -->
+            <div class="absolute top-2.5 left-1/2 -translate-x-1/2 pointer-events-none bg-black/70 backdrop-blur border border-white/10 px-3 py-1 rounded-full text-[10px] font-bold text-gray-300 shadow">
+              🖱️ Drag to pan · Scroll to zoom
+            </div>
+          </div>
+        </div>
+
+        <!-- Zoom & Viewport Controls -->
+        <div class="mt-4 bg-white/5 border border-white/10 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <!-- Zoom Slider -->
+          <div class="flex items-center gap-3 w-full sm:w-auto">
+            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider shrink-0">Zoom:</span>
+            <button 
+              type="button" 
+              @click="bannerZoom = Math.max(1, parseFloat((bannerZoom - 0.1).toFixed(2)))" 
+              class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10"
+              title="Zoom Out"
+            >
+              <ZoomOut class="w-4 h-4" />
+            </button>
+            <input 
+              type="range" 
+              min="1" 
+              max="3" 
+              step="0.01" 
+              v-model.number="bannerZoom" 
+              class="w-full sm:w-44 accent-primary cursor-pointer" 
+            />
+            <button 
+              type="button" 
+              @click="bannerZoom = Math.min(3, parseFloat((bannerZoom + 0.1).toFixed(2)))" 
+              class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10"
+              title="Zoom In"
+            >
+              <ZoomIn class="w-4 h-4" />
+            </button>
+            <span class="text-xs font-mono font-bold text-primary min-w-[3rem] text-right">
+              {{ Math.round(bannerZoom * 100) }}%
+            </span>
+          </div>
+
+          <!-- Reset Button -->
+          <button 
+            type="button" 
+            @click="resetBannerCrop" 
+            class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 text-xs font-bold flex items-center gap-1.5 transition-all w-full sm:w-auto justify-center"
+          >
+            <RotateCcw class="w-3.5 h-3.5" />
+            <span>Reset Framing</span>
+          </button>
+        </div>
+
+        <!-- Live Frontend Storefront Preview (Mirrors TopUp.vue banner) -->
+        <div class="mt-4 pt-4 border-t border-white/10">
+          <div class="flex items-center justify-between mb-2 px-1">
+            <span class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Eye class="w-3.5 h-3.5 text-primary" /> Live Storefront Preview
+            </span>
+            <span class="text-[11px] text-gray-400">Shows how customers will see it on the website</span>
+          </div>
+
+          <div class="relative w-full aspect-[4/1] rounded-2xl overflow-hidden border border-white/10 shadow-xl bg-black">
+            <!-- Mirrored Cropped Image -->
+            <img 
+              :src="bannerCropImageSrc"
+              class="absolute pointer-events-none select-none max-w-none"
+              :style="cropImageStyle"
+            />
+            
+            <!-- Exact overlay gradient from TopUp.vue -->
+            <div class="absolute inset-0 bg-gradient-to-t from-darker via-darker/60 to-transparent"></div>
+
+            <!-- Exact game avatar & title layout from TopUp.vue -->
+            <div class="absolute bottom-0 left-0 p-3 sm:p-5 flex items-end gap-3 sm:gap-4 w-full bg-gradient-to-t from-darker via-darker/80 to-transparent">
+              <div class="w-10 h-10 sm:w-16 sm:h-16 shrink-0 bg-[#161622] rounded-xl border-2 border-primary overflow-hidden shadow-lg">
+                <img v-if="bannerCropGame?.image" :src="bannerCropGame.image" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full bg-white/10"></div>
+              </div>
+              <div class="min-w-0">
+                <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 border border-white/20 mb-1 backdrop-blur-md">
+                  <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                  <span class="text-[9px] font-bold text-white uppercase tracking-wider">Official Partner</span>
+                </div>
+                <h4 class="text-sm sm:text-xl font-black font-outfit text-white leading-tight drop-shadow-md truncate">{{ bannerCropGame?.name }}</h4>
+                <p class="text-gray-300 text-[10px] sm:text-xs drop-shadow truncate">{{ bannerCropGame?.publisher }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="mt-6 flex gap-3">
+          <button 
+            type="button" 
+            @click="showBannerCropModal = false" 
+            class="flex-1 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all border border-white/10"
+          >
+            Cancel
+          </button>
+          <button 
+            type="button" 
+            @click="saveCroppedBanner" 
+            :disabled="isCroppingBanner" 
+            class="flex-1 py-3.5 rounded-xl bg-primary text-darker font-bold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20" 
+            :class="{'opacity-50 cursor-not-allowed': isCroppingBanner}"
+          >
+            <RefreshCw v-if="isCroppingBanner" class="w-5 h-5 animate-spin" />
+            <Crop v-else class="w-5 h-5" />
+            {{ isCroppingBanner ? 'Cropping & Uploading...' : 'Crop & Save Banner' }}
           </button>
         </div>
       </div>
