@@ -283,6 +283,19 @@ const checkPlayerId = async () => {
       throw new Error(validateData.err_message || validateData.error || validateData.message || 'Invalid Player ID')
     } else {
       validatedName.value = validateData.username || 'Valid Account'
+
+      // Auto-update recent account name if the player changed their in-game name
+      if (validateData.username) {
+        const existingIdx = recentAccounts.value.findIndex(
+          acc => acc.playerId === playerId.value.trim() && (acc.zoneId || '') === (zoneId.value ? zoneId.value.trim() : '')
+        )
+        if (existingIdx !== -1) {
+          recentAccounts.value[existingIdx].username = validateData.username
+          try {
+            localStorage.setItem(`gtu_recent_${gameId}`, JSON.stringify(recentAccounts.value))
+          } catch (e) {}
+        }
+      }
     }
   } catch (error) {
     console.error(error)
