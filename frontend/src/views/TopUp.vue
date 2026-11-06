@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { CheckCircle2, AlertCircle, RefreshCw, Download } from 'lucide-vue-next'
+import { CheckCircle2, AlertCircle, RefreshCw, Download, Clock } from 'lucide-vue-next'
 import { useAuth } from '../composables/useAuth'
 
 const route = useRoute()
@@ -118,6 +118,10 @@ onMounted(async () => {
   } finally {
     setTimeout(() => { isLoading.value = false }, 600) // Artificial delay for skeleton
     selectedPayment.value = payments[0] // Auto-select KHQR
+    loadRecentAccounts()
+    if (!playerId.value && recentAccounts.value.length > 0) {
+      selectRecentAccount(recentAccounts.value[0])
+    }
   }
   
   // Real-time SSE updates
@@ -196,6 +200,61 @@ watch(khqrModalOpen, (isOpen) => {
     document.body.style.overflow = ''
   }
 })
+
+// Recent Accounts State & Logic
+const recentAccounts = ref([])
+
+const loadRecentAccounts = () => {
+  try {
+    const saved = localStorage.getItem(`gtu_recent_${gameId}`)
+    if (saved) {
+      recentAccounts.value = JSON.parse(saved)
+    }
+  } catch (err) {
+    console.debug('Failed to load recent accounts:', err)
+  }
+}
+
+const saveRecentAccount = () => {
+  if (!playerId.value) return
+  try {
+    const newEntry = {
+      playerId: playerId.value.trim(),
+      zoneId: zoneId.value ? zoneId.value.trim() : '',
+      username: validatedName.value || '',
+      timestamp: Date.now()
+    }
+
+    const filtered = recentAccounts.value.filter(
+      acc => !(acc.playerId === newEntry.playerId && (acc.zoneId || '') === (newEntry.zoneId || ''))
+    )
+
+    recentAccounts.value = [newEntry, ...filtered].slice(0, 5)
+    localStorage.setItem(`gtu_recent_${gameId}`, JSON.stringify(recentAccounts.value))
+  } catch (err) {
+    console.debug('Failed to save recent account:', err)
+  }
+}
+
+const selectRecentAccount = (acc) => {
+  playerId.value = acc.playerId
+  if (acc.zoneId) {
+    zoneId.value = acc.zoneId
+  }
+  if (acc.username) {
+    validatedName.value = acc.username
+    idCheckError.value = ''
+  }
+}
+
+const removeRecentAccount = (index) => {
+  recentAccounts.value.splice(index, 1)
+  try {
+    localStorage.setItem(`gtu_recent_${gameId}`, JSON.stringify(recentAccounts.value))
+  } catch (err) {
+    console.debug('Failed to update recent accounts:', err)
+  }
+}
 
 const isCheckingId = ref(false)
 const idCheckError = ref('')
@@ -603,6 +662,7 @@ const confirmPaymentAndTopUp = async () => {
         khqrModalOpen.value = false
         currentTransaction.value = data.transaction
         transactionSuccess.value = true
+        saveRecentAccount()
         
         if (data.transaction?.status === 'processing') {
           showToast('Payment verified! Sending your diamonds...', 'info')
@@ -650,6 +710,7 @@ const startStatusPolling = (txId) => {
         currentTransaction.value = data.transaction
         if (data.transaction.status === 'completed') {
           clearInterval(statusPollingInterval)
+          saveRecentAccount()
           showToast('Diamonds Delivered! Top-Up Completed!', 'success')
         } else if (data.transaction.status === 'failed') {
           clearInterval(statusPollingInterval)
@@ -727,6 +788,42 @@ const resetCheckout = () => {
             <div v-if="needsZoneId">
               <label class="block text-[11px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Zone ID</label>
               <input v-model="zoneId" type="text" placeholder="Enter Zone ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-primary/50 focus:bg-white/10 transition-all placeholder:text-gray-600">
+            </div>
+          </div>
+
+          <!-- Recent Accounts Quick-Select Chips -->
+          <div v-if="recentAccounts.length > 0" class="mt-3.5 pt-3 border-t border-white/5">
+            <div class="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 select-none">
+              <Clock class="w-3 h-3 text-primary" />
+              <span>Recently Used:</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <div 
+                v-for="(acc, idx) in recentAccounts" 
+                :key="idx"
+                @click="selectRecentAccount(acc)"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all border group select-none"
+                :class="playerId === acc.playerId && (!needsZoneId || zoneId === acc.zoneId)
+                  ? 'bg-primary/15 border-primary/50 text-primary shadow-sm ring-1 ring-primary/40'
+                  : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/20 hover:text-white'"
+                :title="`Click to autofill ${acc.username || acc.playerId}`"
+              >
+                <span class="w-1.5 h-1.5 rounded-full" :class="playerId === acc.playerId && (!needsZoneId || zoneId === acc.zoneId) ? 'bg-primary animate-pulse' : 'bg-gray-500'"></span>
+                <span class="font-semibold">{{ acc.username || acc.playerId }}</span>
+                <span v-if="acc.username" class="text-[10px] text-gray-400 font-mono">({{ acc.playerId }}{{ acc.zoneId ? ` / ${acc.zoneId}` : '' }})</span>
+                <span v-else-if="acc.zoneId" class="text-[10px] text-gray-400 font-mono">({{ acc.zoneId }})</span>
+                
+                <button 
+                  @click.stop="removeRecentAccount(idx)" 
+                  type="button"
+                  class="text-gray-500 hover:text-red-400 ml-1 p-0.5 rounded transition-colors"
+                  title="Remove from recent"
+                >
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
           
