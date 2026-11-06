@@ -923,8 +923,12 @@ const resetCheckout = () => {
                   <div class="font-bold text-white text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors flex-1 break-words">
                     {{ pkg.displayName || pkg.name }}
                     <div v-if="pkg.bonusText" class="mt-1.5">
-                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-amber-400/10 text-amber-300 border border-amber-400/25 leading-none">
-                        <Sparkles class="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                      <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/[0.08] text-amber-400 border border-amber-500/35 shadow-sm select-none leading-none">
+                        <svg class="w-3 h-3 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M11 2C11 6.97 7.03 11 2 11C7.03 11 11 15.03 11 20C11 15.03 14.97 11 20 11C14.97 11 11 6.97 11 2Z" />
+                          <path d="M19 2V6M17 4H21" />
+                          <circle cx="4" cy="19" r="1.2" fill="currentColor" stroke="none" />
+                        </svg>
                         <span>{{ pkg.bonusText }}</span>
                       </span>
                     </div>
