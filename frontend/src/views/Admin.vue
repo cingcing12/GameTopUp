@@ -2388,7 +2388,7 @@ const formatDate = (dateString) => {
           >
             <!-- Left: Icon & Name -->
             <div class="font-bold text-white text-sm md:w-5/12 flex items-center gap-3">
-              <div class="relative w-12 h-12 shrink-0 bg-black/50 border border-white/10 rounded-xl overflow-hidden group p-1">
+              <div class="relative w-16 h-16 shrink-0 bg-black/50 border border-white/10 rounded-2xl overflow-hidden group p-1 shadow-md">
                 <img v-if="pkg.customImage" :src="pkg.customImage" class="w-full h-full object-contain filter drop-shadow" />
                 <div v-else class="w-full h-full flex items-center justify-center text-xl">💎</div>
                 

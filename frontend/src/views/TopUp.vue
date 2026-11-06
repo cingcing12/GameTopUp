@@ -883,7 +883,7 @@ const resetCheckout = () => {
               v-for="pkg in packages" 
               :key="pkg.id"
               @click="pkg.stock_status !== 'outofstock' && (selectedPackage = pkg)"
-              class="relative rounded-2xl p-3 sm:p-3.5 text-left transition-all duration-200 overflow-hidden flex flex-col justify-between group/pkg select-none min-h-[110px] sm:min-h-[116px]"
+              class="relative rounded-2xl p-3 sm:p-3.5 text-left transition-all duration-200 overflow-hidden flex flex-col justify-between group/pkg select-none min-h-[110px] sm:min-h-[120px]"
               :class="[
                 pkg.stock_status === 'outofstock' 
                   ? 'bg-black/30 border border-white/5 cursor-not-allowed opacity-50' 
@@ -913,18 +913,18 @@ const resetCheckout = () => {
 
               <!-- Main Package Info -->
               <div :class="pkg.isFeatured || pkg.stock_status === 'outofstock' ? 'mt-4 sm:mt-4.5' : ''" class="flex-1">
-                <div class="flex items-center gap-2.5 mb-2">
-                  <!-- Custom Image (Large & Crisp) or Currency Glyph -->
+                <div class="flex items-center gap-2.5 sm:gap-3 mb-2">
+                  <!-- Custom Image (Large, Crisp & Eye-Catching) or Currency Glyph -->
                   <div 
                     :class="gameInfo.customImages?.[pkg.id] 
-                      ? 'w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white/5 border border-white/10 p-1' 
+                      ? 'w-14 h-14 sm:w-18 sm:h-18 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-white/10 via-white/[0.04] to-transparent border border-white/15 p-1' 
                       : 'w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/10 border border-primary/20'" 
-                    class="flex items-center justify-center shrink-0 shadow-sm transition-transform duration-300 group-hover/pkg:scale-105"
+                    class="flex items-center justify-center shrink-0 shadow-md transition-all duration-300 group-hover/pkg:scale-105"
                   >
                     <img 
                       v-if="gameInfo.customImages?.[pkg.id]" 
                       :src="gameInfo.customImages[pkg.id]" 
-                      class="w-full h-full object-contain filter drop-shadow" 
+                      class="w-full h-full object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)] transition-transform duration-300 group-hover/pkg:scale-110" 
                     />
                     <img 
                       v-else-if="gameInfo.currencyImage && gameInfo.currencyImage.startsWith('http')" 
@@ -937,7 +937,7 @@ const resetCheckout = () => {
                   <!-- Text Block (clean, no messy wrapping) -->
                   <div class="flex-1 min-w-0">
                     <div 
-                      class="font-black text-xs sm:text-sm leading-tight transition-colors line-clamp-2"
+                      class="font-black text-xs sm:text-sm md:text-base leading-tight transition-colors line-clamp-2"
                       :class="selectedPackage?.id === pkg.id ? 'text-primary' : 'text-white group-hover/pkg:text-primary'"
                     >
                       {{ pkg.displayName || pkg.name }}
