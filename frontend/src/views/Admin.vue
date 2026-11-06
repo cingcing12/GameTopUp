@@ -577,13 +577,21 @@ const openPricingModal = async (game) => {
         if (cleanName.includes(' (#')) {
           cleanName = cleanName.substring(0, cleanName.indexOf(' (#'))
         }
+
+        // Calculate total amount if name contains arithmetic e.g. "50 + 5 Diamonds" -> "55 Diamonds"
+        const calculatedName = cleanName.replace(/(\d+)\s*\+\s*(\d+)(?:\s*\+\s*(\d+))?/g, (match, n1, n2, n3) => {
+          const total = parseInt(n1, 10) + parseInt(n2, 10) + (n3 ? parseInt(n3, 10) : 0)
+          return total.toString()
+        }).trim()
+
         const customP = game.customPrices && game.customPrices[p.variation_id.toString()]
         const unitPrice = parseFloat(p.variation_price || 0)
         const origPrice = parseFloat(p.original_price || unitPrice)
 
         return {
           id: p.variation_id.toString(),
-          name: cleanName.trim(),
+          name: calculatedName,
+          rawName: cleanName.trim(),
           originalPrice: origPrice,
           customPrice: customP !== undefined ? parseFloat(customP) : unitPrice,
           customImage: game.customImages && game.customImages[p.variation_id.toString()] ? game.customImages[p.variation_id.toString()] : null,

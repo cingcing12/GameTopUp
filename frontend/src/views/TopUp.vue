@@ -60,12 +60,6 @@ const loadGamePackages = async (dbGame) => {
         cleanName = cleanName.substring(0, cleanName.indexOf(' (#'));
       }
       
-      const match = cleanName.match(/\d+/);
-      const parsedAmount = match ? parseInt(match[0]) : 1;
-      
-      const unitPrice = parseFloat(item.variation_price || 0);
-      const origPrice = parseFloat(item.original_price || unitPrice);
-      
       let bonusText = '';
       let displayName = cleanName.trim();
       const parenMatch = displayName.match(/\((.*?)\)/);
@@ -74,11 +68,24 @@ const loadGamePackages = async (dbGame) => {
         displayName = displayName.replace(/\(.*?\)/, '').trim();
       }
 
+      // Calculate total amount if name contains arithmetic e.g. "50 + 5 Diamonds" -> "55 Diamonds"
+      displayName = displayName.replace(/(\d+)\s*\+\s*(\d+)(?:\s*\+\s*(\d+))?/g, (match, n1, n2, n3) => {
+        const total = parseInt(n1, 10) + parseInt(n2, 10) + (n3 ? parseInt(n3, 10) : 0);
+        return total.toString();
+      }).trim();
+
+      const match = displayName.match(/\d+/);
+      const parsedAmount = match ? parseInt(match[0], 10) : 1;
+      
+      const unitPrice = parseFloat(item.variation_price || 0);
+      const origPrice = parseFloat(item.original_price || unitPrice);
+
       const isItemFeatured = featuredList.includes(item.variation_id.toString()) || Boolean(item.is_featured);
       
       return {
         id: item.variation_id.toString(),
-        name: cleanName.trim(),
+        name: displayName,
+        rawName: cleanName.trim(),
         displayName: displayName,
         bonusText: bonusText,
         amount: parsedAmount,
