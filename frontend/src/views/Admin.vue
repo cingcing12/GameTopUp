@@ -770,6 +770,7 @@ const toggleGameStatus = async (game) => {
 // Banner Cropper State
 const showBannerCropModal = ref(false)
 const bannerCropGame = ref(null)
+const bannerCropRawFile = ref(null)
 const bannerCropImageSrc = ref('')
 const bannerCropNaturalWidth = ref(0)
 const bannerCropNaturalHeight = ref(0)
@@ -778,8 +779,8 @@ const bannerPanX = ref(0)
 const bannerPanY = ref(0)
 const isCroppingBanner = ref(false)
 const cropViewportRef = ref(null)
-const bannerCropRatio = ref('3/1') // '3/1' (Balanced), '2.2/1' (Mobile Focused), '4/1' (Desktop Wide)
-const bannerPreviewMode = ref('desktop') // 'desktop' | 'mobile'
+const bannerCropRatio = ref('16/9') // '16/9' (Full Wallpaper), '3/1' (Balanced), '4/1' (Desktop Wide), '2.2/1' (Mobile Focused)
+const bannerPreviewMode = ref('mobile') // 'mobile' | 'desktop'
 
 const setBannerCropRatio = (ratio) => {
   bannerCropRatio.value = ratio
@@ -794,14 +795,54 @@ const closeBannerCropModal = () => {
   if (bannerCropImageSrc.value && bannerCropImageSrc.value.startsWith('blob:')) {
     URL.revokeObjectURL(bannerCropImageSrc.value)
   }
+  bannerCropRawFile.value = null
   showBannerCropModal.value = false
+}
+
+const uploadOriginalBanner = async () => {
+  if (!bannerCropGame.value) return
+  
+  if (!bannerCropRawFile.value) {
+    saveCroppedBanner()
+    return
+  }
+
+  isCroppingBanner.value = true
+  try {
+    const formData = new FormData()
+    formData.append('banner', bannerCropRawFile.value)
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const res = await authFetch(`${apiUrl}/api/games/${bannerCropGame.value._id}`, {
+      method: 'PUT',
+      body: formData
+    })
+
+    const updatedGame = await res.json()
+    if (res.ok) {
+      const idx = games.value.findIndex(g => g._id === bannerCropGame.value._id)
+      if (idx !== -1) {
+        games.value[idx] = updatedGame
+      }
+      showToast('Full original banner uploaded successfully!', 'success')
+      closeBannerCropModal()
+    } else {
+      throw new Error(updatedGame.message || 'Failed to upload banner')
+    }
+  } catch (err) {
+    console.error("Error uploading original banner", err)
+    showToast(err.message || 'Error uploading banner', 'error')
+  } finally {
+    isCroppingBanner.value = false
+  }
 }
 
 const openCropForCurrentBanner = async (game) => {
   if (!game || !game.banner) return
   bannerCropGame.value = game
-  bannerCropRatio.value = '3/1'
-  bannerPreviewMode.value = 'desktop'
+  bannerCropRawFile.value = null
+  bannerCropRatio.value = '16/9'
+  bannerPreviewMode.value = 'mobile'
 
   const bannerUrl = game.banner.includes('?') 
     ? `${game.banner}&t=${Date.now()}` 
@@ -973,9 +1014,12 @@ const saveCroppedBanner = async () => {
 
   try {
     const canvas = document.createElement('canvas')
-    let targetWidth = 1500
-    let targetHeight = 500
-    if (bannerCropRatio.value === '4/1') {
+    let targetWidth = 1920
+    let targetHeight = 1080
+    if (bannerCropRatio.value === '16/9') {
+      targetWidth = 1920
+      targetHeight = 1080
+    } else if (bannerCropRatio.value === '4/1') {
       targetWidth = 1600
       targetHeight = 400
     } else if (bannerCropRatio.value === '2.2/1') {
@@ -1036,7 +1080,7 @@ const saveCroppedBanner = async () => {
       if (idx !== -1) {
         games.value[idx] = updatedGame
       }
-      showToast('Banner cropped and uploaded successfully!', 'success')
+      showToast('Banner saved and applied successfully!', 'success')
       closeBannerCropModal()
     } else {
       throw new Error(updatedGame.message || 'Failed to upload cropped banner')
@@ -1054,6 +1098,7 @@ const handleImageUpload = async (event, game, type = 'image') => {
   if (!file) return
 
   if (type === 'banner') {
+    bannerCropRawFile.value = file
     const reader = new FileReader()
     reader.onload = (e) => {
       const img = new Image()
@@ -1062,8 +1107,8 @@ const handleImageUpload = async (event, game, type = 'image') => {
         bannerCropImageSrc.value = e.target.result
         bannerCropNaturalWidth.value = img.naturalWidth
         bannerCropNaturalHeight.value = img.naturalHeight
-        bannerCropRatio.value = '3/1'
-        bannerPreviewMode.value = 'desktop'
+        bannerCropRatio.value = '16/9'
+        bannerPreviewMode.value = 'mobile'
         bannerZoom.value = 1
         bannerPanX.value = 0
         bannerPanY.value = 0
@@ -2498,22 +2543,22 @@ const formatDate = (dateString) => {
             <span class="text-xs text-gray-400 font-bold px-2 uppercase tracking-wider">Aspect Ratio:</span>
             <button 
               type="button" 
+              @click="setBannerCropRatio('16/9')"
+              :class="bannerCropRatio === '16/9' ? 'bg-primary text-darker font-bold shadow-md shadow-primary/20' : 'bg-white/5 hover:bg-white/10 text-gray-300'"
+              class="px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5"
+            >
+              <Smartphone class="w-3.5 h-3.5" />
+              <span>16:9</span>
+              <span class="text-[10px] opacity-80">(Full Wallpaper / Mobile)</span>
+            </button>
+            <button 
+              type="button" 
               @click="setBannerCropRatio('3/1')"
               :class="bannerCropRatio === '3/1' ? 'bg-primary text-darker font-bold shadow-md shadow-primary/20' : 'bg-white/5 hover:bg-white/10 text-gray-300'"
               class="px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1"
             >
               <span>3:1</span>
-              <span class="text-[10px] opacity-80">(Recommended)</span>
-            </button>
-            <button 
-              type="button" 
-              @click="setBannerCropRatio('2.2/1')"
-              :class="bannerCropRatio === '2.2/1' ? 'bg-primary text-darker font-bold shadow-md shadow-primary/20' : 'bg-white/5 hover:bg-white/10 text-gray-300'"
-              class="px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5"
-            >
-              <Smartphone class="w-3.5 h-3.5" />
-              <span>2.2:1</span>
-              <span class="text-[10px] opacity-80">(Mobile Fit)</span>
+              <span class="text-[10px] opacity-80">(Balanced)</span>
             </button>
             <button 
               type="button" 
@@ -2539,8 +2584,8 @@ const formatDate = (dateString) => {
 
           <div 
             ref="cropViewportRef"
-            :class="bannerCropRatio === '4/1' ? 'aspect-[4/1]' : bannerCropRatio === '2.2/1' ? 'aspect-[2.2/1]' : 'aspect-[3/1]'"
-            class="relative w-full max-h-[360px] overflow-hidden rounded-2xl bg-black border-2 border-primary/50 cursor-grab active:cursor-grabbing select-none shadow-[0_0_30px_rgba(0,0,0,0.8)] touch-none transition-[aspect-ratio] duration-200"
+            :class="bannerCropRatio === '16/9' ? 'aspect-video' : bannerCropRatio === '4/1' ? 'aspect-[4/1]' : bannerCropRatio === '2.2/1' ? 'aspect-[2.2/1]' : 'aspect-[3/1]'"
+            class="relative w-full max-h-[380px] overflow-hidden rounded-2xl bg-black border-2 border-primary/50 cursor-grab active:cursor-grabbing select-none shadow-[0_0_30px_rgba(0,0,0,0.8)] touch-none transition-[aspect-ratio] duration-200"
             @mousedown="onBannerPanStart"
             @mousemove="onBannerPanMove"
             @mouseup="onBannerPanEnd"
@@ -2632,15 +2677,6 @@ const formatDate = (dateString) => {
             <div class="flex items-center gap-1 bg-white/5 border border-white/10 p-1 rounded-xl">
               <button 
                 type="button" 
-                @click="bannerPreviewMode = 'desktop'"
-                :class="bannerPreviewMode === 'desktop' ? 'bg-primary text-darker font-bold' : 'text-gray-400 hover:text-white'"
-                class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all"
-              >
-                <Monitor class="w-3.5 h-3.5" />
-                Desktop
-              </button>
-              <button 
-                type="button" 
                 @click="bannerPreviewMode = 'mobile'"
                 :class="bannerPreviewMode === 'mobile' ? 'bg-primary text-darker font-bold' : 'text-gray-400 hover:text-white'"
                 class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all"
@@ -2648,12 +2684,21 @@ const formatDate = (dateString) => {
                 <Smartphone class="w-3.5 h-3.5" />
                 Mobile (Phone)
               </button>
+              <button 
+                type="button" 
+                @click="bannerPreviewMode = 'desktop'"
+                :class="bannerPreviewMode === 'desktop' ? 'bg-primary text-darker font-bold' : 'text-gray-400 hover:text-white'"
+                class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              >
+                <Monitor class="w-3.5 h-3.5" />
+                Desktop
+              </button>
             </div>
           </div>
 
           <!-- Preview Container -->
           <div 
-            :class="bannerPreviewMode === 'mobile' ? 'max-w-[340px] aspect-[2.1/1] mx-auto rounded-2xl' : (bannerCropRatio === '4/1' ? 'aspect-[4/1]' : bannerCropRatio === '2.2/1' ? 'aspect-[2.2/1]' : 'aspect-[3/1]') + ' w-full rounded-2xl'"
+            :class="bannerPreviewMode === 'mobile' ? 'max-w-[340px] aspect-video mx-auto rounded-2xl' : (bannerCropRatio === '16/9' ? 'aspect-video' : bannerCropRatio === '4/1' ? 'aspect-[4/1]' : bannerCropRatio === '2.2/1' ? 'aspect-[2.2/1]' : 'aspect-[3/1]') + ' w-full rounded-2xl'"
             class="relative overflow-hidden border border-white/10 shadow-xl bg-black transition-all duration-300"
           >
             <!-- Mirrored Cropped Image -->
@@ -2664,7 +2709,7 @@ const formatDate = (dateString) => {
             />
             
             <!-- Exact overlay gradient from TopUp.vue -->
-            <div class="absolute inset-0 bg-gradient-to-t from-darker via-darker/60 to-transparent"></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-darker/90 via-darker/30 to-transparent"></div>
 
             <!-- Exact game avatar & title layout from TopUp.vue -->
             <div 
@@ -2696,13 +2741,25 @@ const formatDate = (dateString) => {
         </div>
 
         <!-- Footer Actions -->
-        <div class="mt-6 flex gap-3">
+        <div class="mt-6 flex flex-col sm:flex-row gap-3">
           <button 
             type="button" 
             @click="closeBannerCropModal" 
-            class="flex-1 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all border border-white/10"
+            class="px-5 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all border border-white/10"
           >
             Cancel
+          </button>
+          <button 
+            v-if="bannerCropRawFile"
+            type="button" 
+            @click="uploadOriginalBanner" 
+            :disabled="isCroppingBanner" 
+            class="flex-1 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-all flex items-center justify-center gap-2 border border-white/20 shadow-md" 
+            :class="{'opacity-50 cursor-not-allowed': isCroppingBanner}"
+            title="Upload the full original image file without cropping"
+          >
+            <Upload class="w-4 h-4 text-primary" />
+            <span>Upload Full Original (No Crop)</span>
           </button>
           <button 
             type="button" 
@@ -2713,7 +2770,7 @@ const formatDate = (dateString) => {
           >
             <RefreshCw v-if="isCroppingBanner" class="w-5 h-5 animate-spin" />
             <Crop v-else class="w-5 h-5" />
-            {{ isCroppingBanner ? 'Cropping & Uploading...' : 'Crop & Save Banner' }}
+            {{ isCroppingBanner ? 'Saving...' : 'Apply & Save Banner' }}
           </button>
         </div>
       </div>

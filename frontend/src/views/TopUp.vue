@@ -759,36 +759,36 @@ const resetCheckout = () => {
   <div class="container mx-auto px-4 md:px-6 py-12 relative z-10 max-w-7xl">
     
     <!-- Game Header Banner Skeleton -->
-    <div v-if="isLoading" class="relative w-full aspect-[2.1/1] sm:aspect-[2.6/1] md:aspect-auto md:h-72 rounded-2xl md:rounded-[2rem] overflow-hidden mb-8 md:mb-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 bg-white/5 animate-pulse">
-      <div class="absolute bottom-0 left-0 p-4 sm:p-5 md:p-8 flex items-end gap-3 sm:gap-4 md:gap-6 w-full">
-        <div class="w-14 h-14 sm:w-16 sm:h-16 md:w-24 md:h-24 shrink-0 bg-white/10 rounded-xl md:rounded-2xl border-[2px] md:border-[3px] border-white/20"></div>
+    <div v-if="isLoading" class="relative w-full aspect-video sm:aspect-[2.2/1] md:aspect-auto md:h-72 rounded-2xl md:rounded-[2rem] overflow-hidden mb-8 md:mb-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 bg-white/5 animate-pulse">
+      <div class="absolute bottom-0 left-0 p-3 sm:p-5 md:p-8 flex items-end gap-3 sm:gap-4 md:gap-6 w-full">
+        <div class="w-12 h-12 sm:w-16 sm:h-16 md:w-24 md:h-24 shrink-0 bg-white/10 rounded-xl md:rounded-2xl border-[2px] md:border-[3px] border-white/20"></div>
         <div class="w-full">
-          <div class="w-20 sm:w-24 h-5 md:h-8 bg-white/10 rounded-full mb-1.5 md:mb-3"></div>
-          <div class="w-3/4 md:w-1/2 h-6 sm:h-10 md:h-12 bg-white/10 rounded-lg mb-1.5 md:mb-2"></div>
-          <div class="w-1/3 h-4 md:h-6 bg-white/10 rounded-lg"></div>
+          <div class="w-20 sm:w-24 h-4 sm:h-5 md:h-8 bg-white/10 rounded-full mb-1 sm:mb-1.5 md:mb-3"></div>
+          <div class="w-3/4 md:w-1/2 h-5 sm:h-6 md:h-12 bg-white/10 rounded-lg mb-1 sm:mb-1.5 md:mb-2"></div>
+          <div class="w-1/3 h-3 sm:h-4 md:h-6 bg-white/10 rounded-lg"></div>
         </div>
       </div>
     </div>
 
     <!-- Game Header Banner -->
-    <div v-else class="relative w-full aspect-[2.1/1] sm:aspect-[2.6/1] md:aspect-auto md:h-72 rounded-2xl md:rounded-[2rem] overflow-hidden mb-8 md:mb-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 group">
+    <div v-else class="relative w-full aspect-video sm:aspect-[2.2/1] md:aspect-auto md:h-72 rounded-2xl md:rounded-[2rem] overflow-hidden mb-8 md:mb-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 group">
       <img v-if="gameInfo.banner" :src="gameInfo.banner" class="w-full h-full object-cover object-center transition-transform duration-1000 group-hover:scale-105" />
       <div v-else class="w-full h-full bg-gradient-to-r from-primary/20 to-purple-900/40"></div>
       
-      <div class="absolute inset-0 bg-gradient-to-t from-darker via-darker/60 to-transparent"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-darker/90 via-darker/30 to-transparent"></div>
       
-      <div class="absolute bottom-0 left-0 p-4 sm:p-5 md:p-8 flex items-end gap-3 sm:gap-4 md:gap-6 w-full bg-gradient-to-t from-darker via-darker/80 to-transparent">
-        <div class="w-14 h-14 sm:w-16 sm:h-16 md:w-24 md:h-24 shrink-0 bg-card rounded-xl md:rounded-2xl border-[2px] md:border-[3px] border-primary overflow-hidden shadow-[0_0_20px_rgba(255,215,0,0.3)]">
+      <div class="absolute bottom-0 left-0 p-3 sm:p-5 md:p-8 flex items-end gap-3 sm:gap-4 md:gap-6 w-full bg-gradient-to-t from-darker via-darker/80 to-transparent">
+        <div class="w-12 h-12 sm:w-16 sm:h-16 md:w-24 md:h-24 shrink-0 bg-card rounded-xl md:rounded-2xl border-[2px] md:border-[3px] border-primary overflow-hidden shadow-[0_0_20px_rgba(255,215,0,0.3)]">
            <img v-if="gameInfo.image" :src="gameInfo.image" class="w-full h-full object-cover" />
            <div v-else class="w-full h-full bg-white/10"></div>
         </div>
-        <div>
-          <div class="inline-flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-0.5 md:py-1 rounded-full bg-white/10 border border-white/20 mb-1.5 md:mb-3 backdrop-blur-md">
+        <div class="min-w-0">
+          <div class="inline-flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-0.5 md:py-1 rounded-full bg-white/10 border border-white/20 mb-1 md:mb-3 backdrop-blur-md">
             <span class="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-green-400 animate-pulse"></span>
-            <span class="text-[9px] sm:text-[10px] md:text-xs font-bold text-white uppercase tracking-wider">Official Partner</span>
+            <span class="text-[8px] sm:text-[10px] md:text-xs font-bold text-white uppercase tracking-wider">Official Partner</span>
           </div>
-          <h1 class="text-xl sm:text-3xl md:text-5xl font-black font-outfit text-white mb-0.5 md:mb-2 tracking-tight drop-shadow-lg leading-tight">{{ gameInfo.name }}</h1>
-          <p class="text-gray-300 font-medium text-xs sm:text-sm md:text-lg drop-shadow-md">{{ gameInfo.publisher }}</p>
+          <h1 class="text-lg sm:text-3xl md:text-5xl font-black font-outfit text-white mb-0.5 md:mb-2 tracking-tight drop-shadow-lg leading-tight truncate">{{ gameInfo.name }}</h1>
+          <p class="text-gray-300 font-medium text-xs sm:text-sm md:text-lg drop-shadow-md truncate">{{ gameInfo.publisher }}</p>
         </div>
       </div>
     </div>
