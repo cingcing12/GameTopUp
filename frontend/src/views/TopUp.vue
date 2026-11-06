@@ -62,12 +62,22 @@ const loadGamePackages = async (dbGame) => {
       const unitPrice = parseFloat(item.variation_price || 0);
       const origPrice = parseFloat(item.original_price || unitPrice);
       
+      let bonusText = '';
+      let displayName = cleanName.trim();
+      const parenMatch = displayName.match(/\((.*?)\)/);
+      if (parenMatch) {
+        bonusText = parenMatch[1].trim();
+        displayName = displayName.replace(/\(.*?\)/, '').trim();
+      }
+      
       return {
         id: item.variation_id.toString(),
         name: cleanName.trim(),
+        displayName: displayName,
+        bonusText: bonusText,
         amount: parsedAmount,
         bonus: '',
-        tag: '',
+        tag: bonusText,
         price: unitPrice,
         original_price: origPrice,
         icon: '💎',
@@ -753,43 +763,54 @@ const resetCheckout = () => {
               v-for="pkg in packages" 
               :key="pkg.id"
               @click="pkg.stock_status !== 'outofstock' && (selectedPackage = pkg)"
-              class="relative border rounded-xl p-4 text-left transition-all duration-300 overflow-hidden flex flex-col justify-between h-full group"
+              class="relative rounded-2xl p-3.5 sm:p-4 text-left transition-all duration-200 overflow-hidden flex flex-col justify-between group select-none min-h-[96px]"
               :class="[
-                pkg.stock_status === 'outofstock' ? 'bg-black/40 border-white/5 cursor-not-allowed opacity-60' : 'bg-white/5 hover:bg-white/10 cursor-pointer',
-                selectedPackage?.id === pkg.id ? 'border-primary shadow-[0_0_15px_rgba(255,215,0,0.1)] bg-primary/5 -translate-y-0.5' : 'border-white/5'
+                pkg.stock_status === 'outofstock' 
+                  ? 'bg-black/30 border border-white/5 cursor-not-allowed opacity-50' 
+                  : 'bg-[#151722]/80 hover:bg-[#1b1e2c] border cursor-pointer',
+                selectedPackage?.id === pkg.id 
+                  ? 'border-primary bg-primary/[0.08] shadow-[0_0_20px_rgba(255,215,0,0.12)] ring-1 ring-primary/80 -translate-y-0.5' 
+                  : 'border-white/10 hover:border-white/20'
               ]"
               :disabled="pkg.stock_status === 'outofstock'"
             >
-              <!-- Selected Badge -->
-              <div v-if="selectedPackage?.id === pkg.id" class="absolute top-2 right-2 text-primary">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+              <!-- Selected Checkmark Badge (Top Right) -->
+              <div v-if="selectedPackage?.id === pkg.id" class="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-primary text-darker flex items-center justify-center shadow-md">
+                <svg class="w-3 h-3 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
               </div>
 
-              <!-- Tag (First Top Up) -->
-              <div v-if="pkg.tag && pkg.stock_status !== 'outofstock'" class="absolute top-0 left-0 bg-red-500/80 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-br text-center">
-                {{ pkg.tag }}
+              <!-- Top Left Badge: Bonus or Out of Stock -->
+              <div v-if="pkg.stock_status === 'outofstock'" class="absolute -top-px -left-px bg-gray-700 text-gray-300 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-tl-xl rounded-br-lg">
+                Sold Out
               </div>
-              
-              <!-- Out of Stock Badge -->
-              <div v-if="pkg.stock_status === 'outofstock'" class="absolute top-0 left-0 bg-gray-600/80 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-br text-center">
-                OUT OF STOCK
+              <div v-else-if="pkg.bonusText" class="absolute -top-px -left-px bg-gradient-to-r from-amber-500 to-yellow-500 text-darker text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-tl-xl rounded-br-lg shadow-sm">
+                {{ pkg.bonusText }}
               </div>
 
-              <!-- Icon & Amount -->
-              <div class="mt-1">
-                <div class="text-xl mb-3 transform transition-transform group-hover:scale-105 origin-left flex items-center h-14 w-28">
-                  <img v-if="gameInfo.customImages?.[pkg.id]" :src="gameInfo.customImages[pkg.id]" class="w-full h-full object-contain object-left rounded shadow-sm drop-shadow-md" />
-                  <img v-else-if="gameInfo.currencyImage && gameInfo.currencyImage.startsWith('http')" :src="gameInfo.currencyImage" class="w-8 h-8 object-contain object-left" />
-                  <span v-else>{{ gameInfo.currencyImage || pkg.icon }}</span>
+              <!-- Main Package Info -->
+              <div :class="pkg.bonusText || pkg.stock_status === 'outofstock' ? 'mt-2' : ''">
+                <div class="flex items-center gap-2.5 mb-1 pr-6">
+                  <div class="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                    <img v-if="gameInfo.customImages?.[pkg.id]" :src="gameInfo.customImages[pkg.id]" class="w-full h-full object-contain rounded-md" />
+                    <img v-else-if="gameInfo.currencyImage && gameInfo.currencyImage.startsWith('http')" :src="gameInfo.currencyImage" class="w-4 h-4 object-contain" />
+                    <span v-else class="text-sm leading-none">{{ gameInfo.currencyImage || pkg.icon || '💎' }}</span>
+                  </div>
+                  <div class="font-bold text-white text-sm leading-snug group-hover:text-primary transition-colors line-clamp-1">
+                    {{ pkg.displayName || pkg.name }}
+                  </div>
                 </div>
-                <div class="font-semibold text-white text-sm leading-tight">{{ pkg.name }}</div>
-                <div v-if="pkg.bonus" class="text-[10px] text-primary font-medium mt-0.5">{{ pkg.bonus }}</div>
               </div>
-              
-              <!-- Price Footer -->
-              <div class="mt-3 pt-2 border-t border-white/5 flex items-center justify-between">
-                <div class="text-xs font-semibold text-gray-400">Price</div>
-                <div class="text-sm font-bold text-white">${{ pkg.price.toFixed(2) }}</div>
+
+              <!-- Minimal Clean Price -->
+              <div class="mt-auto pt-2 flex items-baseline justify-between">
+                <span class="text-base font-extrabold text-white group-hover:text-primary transition-colors tracking-tight">
+                  ${{ pkg.price.toFixed(2) }}
+                </span>
+                <span v-if="pkg.original_price && pkg.original_price > pkg.price" class="text-xs text-gray-500 line-through">
+                  ${{ pkg.original_price.toFixed(2) }}
+                </span>
               </div>
             </button>
           </div>
