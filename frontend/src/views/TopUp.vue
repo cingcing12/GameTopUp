@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { CheckCircle2, AlertCircle, RefreshCw, Download, Clock } from 'lucide-vue-next'
+import { CheckCircle2, AlertCircle, RefreshCw, Download, Clock, Sparkles, Star } from 'lucide-vue-next'
 import { useAuth } from '../composables/useAuth'
 
 const route = useRoute()
@@ -908,7 +908,8 @@ const resetCheckout = () => {
                 Sold Out
               </div>
               <div v-else-if="pkg.isFeatured" class="absolute -top-px -left-px bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-darker text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-tl-xl rounded-br-lg shadow-sm flex items-center gap-1 z-10 leading-normal select-none">
-                <span>⭐</span> FEATURED
+                <Star class="w-2.5 h-2.5 fill-darker text-darker shrink-0" />
+                <span>FEATURED</span>
               </div>
 
               <!-- Main Package Info -->
@@ -921,9 +922,10 @@ const resetCheckout = () => {
                   </div>
                   <div class="font-bold text-white text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors flex-1 break-words">
                     {{ pkg.displayName || pkg.name }}
-                    <div v-if="pkg.bonusText" class="mt-1">
-                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20 leading-none">
-                        <span class="text-[8px]">✨</span> {{ pkg.bonusText }}
+                    <div v-if="pkg.bonusText" class="mt-1.5">
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-amber-400/10 text-amber-300 border border-amber-400/25 leading-none">
+                        <Sparkles class="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                        <span>{{ pkg.bonusText }}</span>
                       </span>
                     </div>
                   </div>
