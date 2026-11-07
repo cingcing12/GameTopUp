@@ -1324,39 +1324,41 @@ const resetCheckout = () => {
       </div>
     </Teleport>
 
-    <!-- Cool Custom Toast Alert (Fixed Top Right) -->
-    <div 
-      class="fixed top-5 right-4 sm:right-6 z-[250] max-w-sm sm:max-w-md w-[calc(100%-2rem)] sm:w-auto transition-all duration-500 transform pointer-events-none"
-      :class="toast.show ? 'translate-y-0 opacity-100' : '-translate-y-6 opacity-0'"
-    >
+    <!-- Cool Custom Toast Alert (Fixed Top Right, Teleported to body to float above Navbar) -->
+    <Teleport to="body">
       <div 
-        v-if="toast.show"
-        class="glass-card bg-[#161622]/95 backdrop-blur-xl border flex items-center gap-3.5 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.6)] pointer-events-auto"
-        :class="toast.type === 'success' 
-          ? 'border-emerald-500/50 shadow-[0_10px_35px_rgba(16,185,129,0.25)]' 
-          : 'border-red-500/50 shadow-[0_10px_35px_rgba(239,68,68,0.25)]'"
+        class="fixed top-4 sm:top-6 right-4 sm:right-6 z-[99999] max-w-sm sm:max-w-md w-[calc(100%-2rem)] sm:w-auto transition-all duration-500 transform pointer-events-none"
+        :class="toast.show ? 'translate-y-0 opacity-100 scale-100' : '-translate-y-8 opacity-0 scale-95'"
       >
         <div 
-          class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
-          :class="toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'"
+          v-if="toast.show"
+          class="glass-card bg-[#161622]/95 backdrop-blur-xl border flex items-center gap-3.5 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] pointer-events-auto"
+          :class="toast.type === 'success' 
+            ? 'border-emerald-500/60 shadow-[0_10px_35px_rgba(16,185,129,0.3)]' 
+            : 'border-red-500/60 shadow-[0_10px_35px_rgba(239,68,68,0.3)]'"
         >
-          <CheckCircle2 v-if="toast.type === 'success'" class="w-5 h-5" />
-          <AlertCircle v-else class="w-5 h-5" />
+          <div 
+            class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+            :class="toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'"
+          >
+            <CheckCircle2 v-if="toast.type === 'success'" class="w-5 h-5" />
+            <AlertCircle v-else class="w-5 h-5" />
+          </div>
+          <div class="flex-1 min-w-0 pr-1">
+            <p class="text-white font-bold text-xs sm:text-sm leading-snug break-words">{{ toast.message }}</p>
+          </div>
+          <button 
+            @click="toast.show = false" 
+            type="button" 
+            class="text-gray-400 hover:text-white p-1 rounded-lg transition-colors shrink-0 cursor-pointer"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-        <div class="flex-1 min-w-0 pr-1">
-          <p class="text-white font-bold text-xs sm:text-sm leading-snug break-words">{{ toast.message }}</p>
-        </div>
-        <button 
-          @click="toast.show = false" 
-          type="button" 
-          class="text-gray-400 hover:text-white p-1 rounded-lg transition-colors shrink-0"
-        >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
       </div>
-    </div>
+    </Teleport>
 
   </div>
 </template>
