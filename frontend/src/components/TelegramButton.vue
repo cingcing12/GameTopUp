@@ -70,7 +70,7 @@ onUnmounted(() => {
 <template>
   <div 
     v-if="telegramEnabled && cleanUsername" 
-    class="fixed bottom-6 right-6 z-50 flex items-center group select-none animate-fade-in"
+    class="fixed bottom-20 sm:bottom-22 lg:bottom-6 right-4 sm:right-6 z-50 flex items-center group select-none animate-fade-in transition-all duration-300"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
   >

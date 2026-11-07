@@ -353,21 +353,42 @@ watch([playerId, zoneId], ([newPlayerId, newZoneId]) => {
   }
 })
 
+const scrollToStep = (id) => {
+  const el = document.getElementById(id)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+}
+
 const handleCheckout = async () => {
   if (!playerId.value) {
     transactionError.value = 'Please enter your Player ID'
+    showToast('Please enter your Player ID', 'error')
+    scrollToStep('step-account-details')
+    return
+  }
+  if (needsZoneId.value && !zoneId.value) {
+    transactionError.value = 'Please enter your Zone ID'
+    showToast('Please enter your Zone ID', 'error')
+    scrollToStep('step-account-details')
     return
   }
   if (!selectedPackage.value) {
     transactionError.value = 'Please select a top-up package'
+    showToast('Please select a top-up package', 'error')
+    scrollToStep('step-select-package')
     return
   }
   if (!selectedPayment.value) {
     transactionError.value = 'Please select a payment method'
+    showToast('Please select a payment method', 'error')
+    scrollToStep('step-payment-method')
     return
   }
   if (!agreeTerms.value) {
     transactionError.value = 'Please agree to the Terms & Conditions to proceed'
+    showToast('Please agree to the Terms & Conditions', 'error')
+    scrollToStep('step-order-summary')
     return
   }
   
@@ -776,7 +797,7 @@ const resetCheckout = () => {
 </script>
 
 <template>
-  <div class="container mx-auto px-4 md:px-6 py-12 relative z-10 max-w-7xl">
+  <div class="container mx-auto px-4 md:px-6 pt-6 sm:pt-8 md:pt-12 pb-28 lg:pb-12 relative z-10 max-w-7xl">
     
     <!-- Game Header Banner Skeleton -->
     <div v-if="isLoading" class="relative w-full aspect-video sm:aspect-[2.2/1] md:aspect-auto md:h-72 rounded-2xl md:rounded-[2rem] overflow-hidden mb-8 md:mb-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 bg-white/5 animate-pulse">
@@ -819,7 +840,7 @@ const resetCheckout = () => {
       <div class="lg:col-span-2 space-y-8">
         
         <!-- Step 1: Account Info -->
-        <div class="glass-card p-6 relative overflow-hidden border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
+        <div id="step-account-details" class="glass-card p-6 relative overflow-hidden border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
           <h2 class="text-lg font-semibold text-white mb-5 flex items-center gap-3">
             <span class="bg-primary/20 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">1</span>
             Account Details
@@ -890,7 +911,7 @@ const resetCheckout = () => {
         </div>
 
         <!-- Step 2: Select Package -->
-        <div class="glass-card p-6 relative overflow-hidden border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
+        <div id="step-select-package" class="glass-card p-6 relative overflow-hidden border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
           <h2 class="text-lg font-semibold text-white mb-5 flex items-center gap-3">
             <span class="bg-primary/20 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">2</span>
             Select Top-Up
@@ -1002,7 +1023,7 @@ const resetCheckout = () => {
       <div class="space-y-8 lg:sticky lg:top-28 self-start">
         
         <!-- Step 3: Payment Method -->
-        <div class="glass-card p-6 relative overflow-hidden border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
+        <div id="step-payment-method" class="glass-card p-6 relative overflow-hidden border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
           <h2 class="text-lg font-semibold text-white mb-5 flex items-center gap-3">
             <span class="bg-primary/20 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">3</span>
             Payment
@@ -1116,7 +1137,7 @@ const resetCheckout = () => {
           </div>
         </div>
 
-        <div v-else class="glass-card p-6 border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
+        <div id="step-order-summary" v-else class="glass-card p-6 border border-white/10 bg-[#161622]/60 backdrop-blur-md rounded-2xl shadow-xl hover:border-white/20 transition-all duration-300">
           <h3 class="text-base font-semibold text-white mb-4 flex items-center gap-2">
             Summary
           </h3>
@@ -1174,6 +1195,61 @@ const resetCheckout = () => {
             <span>{{ isProcessing ? 'Processing...' : 'Pay Now' }}</span>
           </button>
         </div>
+
+      </div>
+    </div>
+
+    <!-- Sticky Mobile Pay Bar (Clean Mobile UX/UI) -->
+    <div 
+      v-if="!transactionSuccess"
+      class="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-[#0e1017]/95 backdrop-blur-xl border-t border-white/10 shadow-[0_-10px_35px_rgba(0,0,0,0.7)] px-4 py-2.5 sm:px-6 transition-all duration-300"
+      style="padding-bottom: max(0.65rem, env(safe-area-inset-bottom));"
+    >
+      <div class="max-w-lg mx-auto flex items-center justify-between gap-3">
+        
+        <!-- Left: Selected Package & Price Preview -->
+        <div class="min-w-0 flex-1">
+          <div v-if="selectedPackage" class="flex flex-col">
+            <div class="flex items-center gap-1.5 text-xs text-gray-200 font-bold truncate">
+              <span class="text-sm shrink-0">💎</span>
+              <span class="truncate">{{ selectedPackage.displayName || selectedPackage.name }}</span>
+            </div>
+            <div class="flex items-baseline gap-1.5 mt-0.5">
+              <span class="text-[10px] text-gray-400 font-medium">Total:</span>
+              <span class="text-lg font-black text-primary tracking-tight">
+                ${{ selectedPackage.price.toFixed(2) }}
+              </span>
+              <span v-if="selectedPackage.bonusText" class="text-[9px] font-bold text-amber-400/90 truncate max-w-[110px]">
+                ({{ selectedPackage.bonusText }})
+              </span>
+            </div>
+          </div>
+          <div v-else class="flex flex-col">
+            <span class="text-xs font-bold text-gray-300">Select a Package</span>
+            <span class="text-[11px] text-gray-500">Choose diamond tier above</span>
+          </div>
+        </div>
+
+        <!-- Right: Pay Button -->
+        <button 
+          @click="selectedPackage ? handleCheckout() : scrollToStep('step-select-package')"
+          :disabled="isProcessing"
+          type="button"
+          class="shrink-0 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-black text-xs sm:text-sm tracking-wide transition-all duration-200 flex items-center gap-2 select-none shadow-lg active:scale-95 cursor-pointer"
+          :class="[
+            isProcessing
+              ? 'bg-white/10 text-gray-400 cursor-not-allowed opacity-70'
+              : (selectedPackage 
+                  ? 'bg-gradient-to-r from-amber-400 via-primary to-yellow-400 text-darker shadow-[0_0_20px_rgba(255,215,0,0.35)] hover:brightness-110 active:scale-95'
+                  : 'bg-white/10 text-gray-300 hover:bg-white/15 border border-white/10 active:scale-95')
+          ]"
+        >
+          <span v-if="isProcessing" class="w-4 h-4 border-2 border-darker border-t-transparent rounded-full animate-spin"></span>
+          <svg v-else-if="selectedPackage" class="w-4 h-4 text-darker stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span>{{ isProcessing ? 'Processing...' : (selectedPackage ? 'Pay Now' : 'Select Package') }}</span>
+        </button>
 
       </div>
     </div>
