@@ -940,12 +940,12 @@ const resetCheckout = () => {
                     :class="gameInfo.customImages?.[pkg.id] 
                       ? 'w-14 h-14 sm:w-18 sm:h-18 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-white/10 via-white/[0.04] to-transparent border border-white/15 p-1' 
                       : 'w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/10 border border-primary/20'" 
-                    class="flex items-center justify-center shrink-0 shadow-md transition-all duration-300 group-hover/pkg:scale-105"
+                    class="relative overflow-hidden isolate flex items-center justify-center shrink-0 shadow-md transition-all duration-300 group-hover/pkg:scale-105"
                   >
                     <img 
                       v-if="gameInfo.customImages?.[pkg.id]" 
                       :src="gameInfo.customImages[pkg.id]" 
-                      class="w-full h-full object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)] transition-transform duration-300 group-hover/pkg:scale-110" 
+                      class="w-full h-full object-contain rounded-xl filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)] transition-transform duration-300 group-hover/pkg:scale-110" 
                     />
                     <img 
                       v-else-if="gameInfo.currencyImage && gameInfo.currencyImage.startsWith('http')" 
