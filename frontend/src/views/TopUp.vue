@@ -207,7 +207,7 @@ const showToast = (message, type = 'success') => {
   toast.value = { show: true, message, type };
   toastTimeout = setTimeout(() => {
     toast.value.show = false;
-  }, 3000);
+  }, type === 'error' ? 5000 : 3500);
 }
 
 watch(khqrModalOpen, (isOpen) => {
@@ -496,7 +496,9 @@ const handleCheckout = async () => {
     startCountdown()
   } catch (error) {
     console.error(error)
-    transactionError.value = error.message || 'Network Error. Could not generate QR.'
+    const errMsg = error.message || 'Network Error. Could not generate QR.'
+    transactionError.value = errMsg
+    showToast(errMsg, 'error')
   } finally {
     isProcessing.value = false
   }
@@ -582,6 +584,7 @@ const startCountdown = () => {
       stopCountdown()
       khqrModalOpen.value = false
       transactionError.value = 'Payment QR Code Expired.'
+      showToast('Payment QR Code Expired. Please try again.', 'error')
     }
   }, 1000)
 
@@ -741,7 +744,9 @@ const confirmPaymentAndTopUp = async () => {
     }
   } catch (error) {
     console.error(error)
-    transactionError.value = error.message || 'Payment verified, but Top-Up failed.'
+    const errMsg = error.message || 'Payment verified, but Top-Up failed.'
+    transactionError.value = errMsg
+    showToast(errMsg, 'error')
     isVerifyingPayment.value = false
     khqrModalOpen.value = false
   }
@@ -1319,23 +1324,37 @@ const resetCheckout = () => {
       </div>
     </Teleport>
 
-    <!-- Cool Custom Toast Alert -->
+    <!-- Cool Custom Toast Alert (Fixed Top Right) -->
     <div 
-      class="fixed bottom-6 right-6 z-[200] transition-all duration-500 transform"
-      :class="toast.show ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'"
+      class="fixed top-5 right-4 sm:right-6 z-[250] max-w-sm sm:max-w-md w-[calc(100%-2rem)] sm:w-auto transition-all duration-500 transform pointer-events-none"
+      :class="toast.show ? 'translate-y-0 opacity-100' : '-translate-y-6 opacity-0'"
     >
       <div 
-        class="glass-card bg-[#161622]/90 backdrop-blur-xl border flex items-center gap-4 px-6 py-4 rounded-2xl shadow-2xl"
-        :class="toast.type === 'success' ? 'border-emerald-500/50 shadow-[0_10px_40px_rgba(16,185,129,0.2)]' : 'border-red-500/50 shadow-[0_10px_40px_rgba(239,68,68,0.2)]'"
+        v-if="toast.show"
+        class="glass-card bg-[#161622]/95 backdrop-blur-xl border flex items-center gap-3.5 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.6)] pointer-events-auto"
+        :class="toast.type === 'success' 
+          ? 'border-emerald-500/50 shadow-[0_10px_35px_rgba(16,185,129,0.25)]' 
+          : 'border-red-500/50 shadow-[0_10px_35px_rgba(239,68,68,0.25)]'"
       >
         <div 
-          class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+          class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
           :class="toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'"
         >
-          <CheckCircle2 v-if="toast.type === 'success'" class="w-6 h-6" />
-          <AlertCircle v-else class="w-6 h-6" />
+          <CheckCircle2 v-if="toast.type === 'success'" class="w-5 h-5" />
+          <AlertCircle v-else class="w-5 h-5" />
         </div>
-        <p class="text-white font-bold text-sm pr-4">{{ toast.message }}</p>
+        <div class="flex-1 min-w-0 pr-1">
+          <p class="text-white font-bold text-xs sm:text-sm leading-snug break-words">{{ toast.message }}</p>
+        </div>
+        <button 
+          @click="toast.show = false" 
+          type="button" 
+          class="text-gray-400 hover:text-white p-1 rounded-lg transition-colors shrink-0"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
     </div>
 
